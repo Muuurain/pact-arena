@@ -16,6 +16,8 @@ static func generate_shop_offers(run: RunState) -> Array[Dictionary]:
 	if run.pacts.has("pact_bounty_hunt"):
 		discount += 35.0
 	var heat_inf := run.active_heats.has("heat_inflation")
+	var diff := GameData.get_difficulty(run.danger_level)
+	var danger_price := float(diff.get("shop_price_mult", 1.0))
 	var luck := run.stats.get_stat("luck")
 
 	var valid_weapons: Array[Dictionary] = []
@@ -37,7 +39,7 @@ static func generate_shop_offers(run: RunState) -> Array[Dictionary]:
 		if is_weapon:
 			var w: Dictionary = valid_weapons[randi() % valid_weapons.size()]
 			var tier := _roll_tier(run.wave, luck, run.pacts.has("pact_bounty_hunt"))
-			var price := CombatFormulas.calc_shop_price(int(w["price"]), tier, run.wave, discount, heat_inf)
+			var price := CombatFormulas.calc_shop_price(int(w["price"]), tier, run.wave, discount, heat_inf, danger_price)
 			offers.append({
 				"kind": "weapon",
 				"id": String(w["id"]),
@@ -48,7 +50,7 @@ static func generate_shop_offers(run: RunState) -> Array[Dictionary]:
 		else:
 			var it: Dictionary = valid_items[randi() % valid_items.size()]
 			var tier := int(it.get("tier", 1))
-			var price := CombatFormulas.calc_shop_price(int(it["price"]), 1, run.wave, discount, heat_inf)
+			var price := CombatFormulas.calc_shop_price(int(it["price"]), 1, run.wave, discount, heat_inf, danger_price)
 			offers.append({
 				"kind": "item",
 				"id": String(it["id"]),

@@ -70,6 +70,10 @@ func start_wave() -> void:
 	if _run.wave == 5 or _run.wave == 10 or (_run.wave > 10 and _run.wave % 5 == 0):
 		var boss_id := "boss_inquisitor" if _run.wave == 5 else "boss_sovereign"
 		enemy_mgr.spawn_enemy(boss_id, Vector2(0.0, -280.0), _run.wave)
+		if _run.danger_level >= 4:
+			enemy_mgr.spawn_enemy("elite_warden", Vector2(-240.0, -220.0), _run.wave)
+			if _run.danger_level >= 5:
+				enemy_mgr.spawn_enemy("elite_warden", Vector2(240.0, -220.0), _run.wave)
 		EventBus.sfx_requested.emit("sfx_boss_warn", 0.0)
 		EventBus.bgm_requested.emit("bgm_boss")
 	else:
@@ -123,40 +127,51 @@ func _step_wave_director(delta: float) -> void:
 	if _spawn_timer > 0.0:
 		return
 
-	var density := 1.0 + float(_run.wave - 1) * 0.14
+	var diff := GameData.get_difficulty(_run.danger_level)
+	var density := (1.0 + float(_run.wave - 1) * 0.16) * float(diff.get("density_mult", 1.0))
 	if _run.pacts.has("pact_time_rush"):
 		density *= 1.45
 	if _run.active_heats.has("heat_density"):
 		density *= 1.20
 
-	var interval := maxf(0.32, 1.35 / density)
+	var interval := maxf(0.26, 1.28 / density)
 	_spawn_timer = interval
 
-	if enemy_mgr.get_alive_count() >= 145:
+	if enemy_mgr.get_alive_count() >= 165:
 		return
 
 	var pool := GameData.get_wave_pool(_run.wave)
-	var pack := clampi(2 + int(_run.wave / 2) + (1 if _run.pacts.has("pact_time_rush") else 0), 2, 7)
+	var base_pack := 2 + int(float(_run.wave) * 0.65) + int(diff.get("pack_bonus", 0))
+	if _run.pacts.has("pact_time_rush"):
+		base_pack += 1
+	var pack := clampi(base_pack, 2, 10)
 	for _i in range(pack):
 		var eid: String = pool[randi() % pool.size()]
 		var pos := _pick_spawn_pos()
 		enemy_mgr.spawn_enemy(eid, pos, _run.wave)
 
-	# Elite spawns from Wave 3+
-	var max_elites := 1 if _run.wave >= 3 and _run.wave < 7 else (2 if _run.wave >= 7 else 0)
+	# Elite spawns scale earlier and higher on steeper Danger tiers
+	var min_elite_wave := 2 if _run.danger_level >= 2 else 3
+	var max_elites := 0
+	if _run.wave >= min_elite_wave:
+		max_elites = (1 if _run.wave < 6 else 2) + int(diff.get("elite_bonus", 0))
 	if _run.pacts.has("pact_bounty_hunt") or _run.active_heats.has("heat_elites"):
 		max_elites += 1
-	if _elite_spawned_count < max_elites and _wave_time_left < _wave_total_time * 0.68:
+	if _elite_spawned_count < max_elites and _wave_time_left < _wave_total_time * 0.72:
 		_elite_spawned_count += 1
 		enemy_mgr.spawn_enemy("elite_warden", _pick_spawn_pos(), _run.wave)
 
 
 func _pick_spawn_pos() -> Vector2:
+	# Spawn along a visible perimeter ring around the player so enemies enter the camera view cleanly
 	for _try in range(6):
-		var p := Vector2(randf_range(-540.0, 540.0), randf_range(-640.0, 640.0))
-		if p.distance_to(player.global_position) >= 270.0:
+		var ang := randf() * TAU
+		var dist := randf_range(265.0, 480.0)
+		var p := player.global_position + Vector2.from_angle(ang) * dist
+		if absf(p.x) <= 545.0 and absf(p.y) <= 645.0:
 			return p
-	return Vector2(-460.0 if player.global_position.x > 0 else 460.0, randf_range(-420.0, 420.0))
+	var fallback := Vector2(-420.0 if player.global_position.x > 0 else 420.0, clampf(player.global_position.y + randf_range(-280.0, 280.0), -620.0, 620.0))
+	return fallback
 
 
 func _begin_wave_clear() -> void:

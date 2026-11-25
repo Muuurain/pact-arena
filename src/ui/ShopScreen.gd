@@ -24,6 +24,8 @@ var _slot_detail_lbl: Label
 var _merge_btn: Button
 var _sell_btn: Button
 var _offers_grid: GridContainer
+var _sinks_box: VBoxContainer
+var _sink_feedback_lbl: Label
 var _reroll_btn: Button
 var _next_btn: Button
 
@@ -202,6 +204,23 @@ func _build_ui() -> void:
 	_offers_grid.add_theme_constant_override("v_separation", 10)
 	mid_v.add_child(_offers_grid)
 
+	var sink_title := Label.new()
+	sink_title.text = "深渊黑市淬炼（无上限强化 · 消耗富余血晶）"
+	sink_title.add_theme_font_size_override("font_size", 17)
+	sink_title.add_theme_color_override("font_color", Color(1.0, 0.72, 0.32))
+	mid_v.add_child(sink_title)
+
+	_sink_feedback_lbl = Label.new()
+	_sink_feedback_lbl.visible = false
+	_sink_feedback_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_sink_feedback_lbl.add_theme_font_size_override("font_size", 14)
+	_sink_feedback_lbl.add_theme_color_override("font_color", UiStyles.COL_EMERALD)
+	mid_v.add_child(_sink_feedback_lbl)
+
+	_sinks_box = VBoxContainer.new()
+	_sinks_box.add_theme_constant_override("separation", 8)
+	mid_v.add_child(_sinks_box)
+
 	# BOTTOM ACTION BAR
 	var bot_h := HBoxContainer.new()
 	bot_h.add_theme_constant_override("separation", 12)
@@ -233,6 +252,9 @@ func open_for_run(run: RunState, generate_new_stock: bool = true) -> void:
 	_synergy_drawer_open = false
 	_synergy_panel.visible = false
 	_slot_action_bar.visible = false
+	if _sink_feedback_lbl != null:
+		_sink_feedback_lbl.visible = false
+		_sink_feedback_lbl.text = ""
 	if generate_new_stock or _run.shop_offers.is_empty():
 		_run.shop_rerolls = 0
 		_run.shop_offers = ShopGenerator.generate_shop_offers(_run)
@@ -246,7 +268,8 @@ func open_for_run(run: RunState, generate_new_stock: bool = true) -> void:
 func refresh_ui() -> void:
 	if _run == null:
 		return
-	_header_lbl.text = "第 %d 波整备 | 血契 %d" % [_run.wave, _run.pacts.size()]
+	var ddef: Dictionary = GameData.get_difficulty(_run.danger_level)
+	_header_lbl.text = "第 %d 波整备 | %s | 血契 %d" % [_run.wave, String(ddef.get("short_name", "D0")), _run.pacts.size()]
 	_crystals_lbl.text = "血晶: %d" % _run.crystals
 
 	# Synergy & Resonance summary + detailed drawer
@@ -330,9 +353,11 @@ func refresh_ui() -> void:
 
 	_update_slot_action_bar()
 	_rebuild_offers()
+	_rebuild_sinks()
 
 	var free_r := int(roundf(SaveManager.get_talent_value("tal_free_reroll")))
-	var r_cost := CombatFormulas.calc_reroll_cost(_run.wave, _run.shop_rerolls, free_r)
+	var danger_price := float(GameData.get_difficulty(_run.danger_level).get("shop_price_mult", 1.0))
+	var r_cost := CombatFormulas.calc_reroll_cost(_run.wave, _run.shop_rerolls, free_r, danger_price)
 	_reroll_btn.text = "免费刷新" if r_cost == 0 else "刷新 ($%d)" % r_cost
 	_reroll_btn.disabled = (_run.crystals < r_cost)
 	_next_btn.text = "出战第 %d 波" % (_run.wave + 1)
@@ -351,7 +376,8 @@ func _update_slot_action_bar() -> void:
 	var dup := _find_merge_partner(_selected_slot)
 	_merge_btn.visible = (dup >= 0)
 	_sell_btn.disabled = (_run.weapons.size() <= 1)
-	var price := CombatFormulas.calc_shop_price(int(wdef.get("price", 18)), tier, _run.wave, 0.0, false)
+	var danger_price := float(GameData.get_difficulty(_run.danger_level).get("shop_price_mult", 1.0))
+	var price := CombatFormulas.calc_shop_price(int(wdef.get("price", 18)), tier, _run.wave, 0.0, false, danger_price)
 	var refund := maxi(5, int(roundf(float(price) * 0.6)))
 	_sell_btn.text = "出售 (+%d)" % refund
 
@@ -557,7 +583,8 @@ func _buy_offer(idx: int) -> void:
 
 func _on_reroll_pressed() -> void:
 	var free_r := int(roundf(SaveManager.get_talent_value("tal_free_reroll")))
-	var cost := CombatFormulas.calc_reroll_cost(_run.wave, _run.shop_rerolls, free_r)
+	var danger_price := float(GameData.get_difficulty(_run.danger_level).get("shop_price_mult", 1.0))
+	var cost := CombatFormulas.calc_reroll_cost(_run.wave, _run.shop_rerolls, free_r, danger_price)
 	if _run.crystals < cost:
 		return
 	_run.add_crystals(-cost)
@@ -566,5 +593,64 @@ func _on_reroll_pressed() -> void:
 	_run.shop_offers = ShopGenerator.generate_shop_offers(_run)
 	_run.locked_shop_offers.clear()
 	EventBus.sfx_requested.emit("sfx_reroll", 0.05)
+	SaveManager.save_resume_run(_run)
+	refresh_ui()
+
+
+func _rebuild_sinks() -> void:
+	if _sinks_box == null:
+		return
+	for c in _sinks_box.get_children():
+		_sinks_box.remove_child(c)
+		c.queue_free()
+	for s in GameData.shop_sinks:
+		var sid := String(s["id"])
+		var cnt := int(_run.shop_sink_counts.get(sid, 0))
+		var cost := _run.get_shop_sink_cost(sid)
+		var can_buy := (_run.crystals >= cost)
+
+		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, Color(0.75, 0.52, 0.22), 12, 2))
+		_sinks_box.add_child(card)
+
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		card.add_child(row)
+
+		var tv := VBoxContainer.new()
+		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(tv)
+
+		var nl := Label.new()
+		nl.text = "%s (本局第 %d 次)" % [String(s["name"]), cnt]
+		nl.add_theme_font_size_override("font_size", 15)
+		nl.add_theme_color_override("font_color", UiStyles.COL_GOLD)
+		tv.add_child(nl)
+
+		var dl := Label.new()
+		dl.text = String(s["effect_text"])
+		dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		dl.add_theme_font_size_override("font_size", 13)
+		dl.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
+		tv.add_child(dl)
+
+		var buy_btn := Button.new()
+		buy_btn.text = "淬炼 $%d" % cost
+		buy_btn.custom_minimum_size = Vector2(114, 46)
+		buy_btn.disabled = not can_buy
+		UiStyles.style_button(buy_btn, UiStyles.COL_GOLD, true, 46.0)
+		buy_btn.add_theme_font_size_override("font_size", 15)
+		buy_btn.pressed.connect(func(): _on_buy_sink_pressed(sid))
+		row.add_child(buy_btn)
+
+
+func _on_buy_sink_pressed(sink_id: String) -> void:
+	var res := _run.buy_shop_sink(sink_id)
+	if not bool(res.get("ok", false)):
+		return
+	if _sink_feedback_lbl != null:
+		_sink_feedback_lbl.text = "★ " + String(res.get("msg", "淬炼完成"))
+		_sink_feedback_lbl.visible = true
+	EventBus.sfx_requested.emit("sfx_awakening" if sink_id == "sink_mystery_relic" else "sfx_buy_merge", 0.05)
 	SaveManager.save_resume_run(_run)
 	refresh_ui()

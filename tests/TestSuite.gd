@@ -25,6 +25,7 @@ func _run_all() -> void:
 	_test_synergies_and_dual_resonances()
 	_test_weapon_merge_and_awakening()
 	_test_shop_and_save_persistence()
+	_test_difficulty_and_economy_rebalance()
 	await _test_touch_scroll_container()
 	await _test_full_ui_and_combat_integration()
 
@@ -47,6 +48,8 @@ func _test_catalog_completeness() -> void:
 	_assert(GameData.talents.size() == 12, "12 Sanctuary talents loaded")
 	_assert(GameData.heats.size() == 8, "8 Heat protocols loaded")
 	_assert(GameData.enemies.size() == 10, "8 enemy types + 2 Bosses loaded")
+	_assert(GameData.difficulties.size() == 6, "6 Difficulty tiers (D0..D5) loaded")
+	_assert(GameData.shop_sinks.size() == 3, "3 Shop crystal sinks loaded")
 
 	var sfx_dir := DirAccess.open("res://assets/audio/sfx")
 	var sfx_oggs: Array[String] = []
@@ -260,7 +263,7 @@ func _test_full_ui_and_combat_integration() -> void:
 
 	# Exercise MainMenu -> HeroSelect -> Sanctuary -> Codex
 	inst._hero_select.open()
-	_assert(inst._hero_select.visible, "HeroSelectScreen opens cleanly")
+	_assert(inst._hero_select.visible and inst._hero_select._danger_box.get_child_count() == 6, "HeroSelectScreen opens cleanly with D0..D5 selector")
 	inst._hero_select.visible = false
 
 	inst._sanctuary.open()
@@ -318,8 +321,23 @@ func _test_full_ui_and_combat_integration() -> void:
 	inst._pact_modal.visible = false
 
 	inst._shop.open_for_run(run, true)
-	_assert(inst._shop.visible and inst._shop._synergy_detail_box.get_child_count() >= 8, "ShopScreen opens cleanly with detailed synergy drawer")
+	_assert(inst._shop.visible and inst._shop._synergy_detail_box.get_child_count() >= 8 and inst._shop._sinks_box.get_child_count() == 3, "ShopScreen opens cleanly with synergy drawer & 3 crystal sinks")
 	inst._shop.visible = false
+
+	var dmg_no_break := CombatFormulas.calc_enemy_damage_after_vuln(100.0, 0.0, 0.35)
+	var dmg_armor_broken := CombatFormulas.calc_enemy_damage_after_vuln(100.0, 1.5, 0.35)
+	_assert(dmg_no_break < 70.0 and dmg_armor_broken >= 120.0, "Boss/Elite resilience reduces unexposed hits and is bypassed by Blood Dash Armor-Break")
+
+	var enemy_mgr := inst.arena.enemy_mgr
+	run.danger_level = 0
+	run.wave = 10
+	var b_d0: Dictionary = enemy_mgr.spawn_enemy("boss_sovereign", Vector2(1800, 1200), 10)
+	var hp_b_d0 := float(b_d0["max_hp"])
+	run.danger_level = 5
+	var b_d5: Dictionary = enemy_mgr.spawn_enemy("boss_sovereign", Vector2(1800, 1200), 10)
+	var hp_b_d5 := float(b_d5["max_hp"])
+	_assert(hp_b_d0 >= 25000.0 and hp_b_d5 >= 80000.0 and hp_b_d5 > hp_b_d0 * 2.8, "Wave 10 Boss Sovereign scales substantially across D0..D5")
+	run.danger_level = 0
 
 	inst.hud.bind_run(run, inst.arena.player)
 	_assert(inst.hud._synergy_box.get_child_count() >= 4, "BattleHud renders active faction & resonance pills")
@@ -346,3 +364,40 @@ func _test_full_ui_and_combat_integration() -> void:
 	SaveManager.clear_resume_run()
 	inst.queue_free()
 	await get_tree().process_frame
+
+
+func _test_difficulty_and_economy_rebalance() -> void:
+	var p_w1 := CombatFormulas.calc_shop_price(30, 1, 1, 0.0, false, 1.0)
+	var p_w10_d5 := CombatFormulas.calc_shop_price(30, 1, 10, 0.0, false, 1.3)
+	_assert(p_w10_d5 > p_w1 * 2, "Wave 10 D5 shop prices scale significantly over Wave 1 D0")
+
+	var r0 := CombatFormulas.calc_reroll_cost(8, 0, 0, 1.0)
+	var r4 := CombatFormulas.calc_reroll_cost(8, 4, 0, 1.25)
+	_assert(r4 > r0 * 2, "Repeated shop rerolls escalate meaningfully")
+
+	var gilded := RunState.new()
+	gilded.start_new_run("hero_gilded_pactkeeper", "wpn_staff", [])
+	gilded.crystals = 720
+	gilded.recompute_effective_stats()
+	var dmg_720 := gilded.stats.get_stat("damage_pct")
+	gilded.crystals = 6000
+	gilded.recompute_effective_stats()
+	var dmg_6000 := gilded.stats.get_stat("damage_pct")
+	_assert(is_equal_approx(dmg_720, dmg_6000), "Gilded Pactkeeper crystal bonus respects upper cap")
+
+	var sink_run := RunState.new()
+	sink_run.start_new_run("hero_crimson_blade", "wpn_chainsaw", [], 4)
+	_assert(sink_run.danger_level == 4, "RunState stores selected D4 difficulty level")
+	sink_run.add_crystals(500)
+	var base_dmg := sink_run.stats.get_stat("damage_pct")
+	var cost_before := sink_run.get_shop_sink_cost("sink_temper_power")
+	var r1 := sink_run.buy_shop_sink("sink_temper_power")
+	_assert(bool(r1.get("ok", false)) and sink_run.stats.get_stat("damage_pct") >= base_dmg + 11.9, "Abyssal Temper sink permanently boosts player stats")
+	_assert(sink_run.get_shop_sink_cost("sink_temper_power") > cost_before, "Abyssal Temper cost scales up with purchases")
+	var r2 := sink_run.buy_shop_sink("sink_mystery_relic")
+	_assert(bool(r2.get("ok", false)) and sink_run.items.size() == 1, "Mystery Relic blind-box sink grants a random item")
+
+	var ember_d0 := sink_run.calc_ember_reward()
+	sink_run.danger_level = 5
+	var ember_d5 := sink_run.calc_ember_reward()
+	_assert(ember_d5 > ember_d0, "Higher Danger tiers award significantly more Abyss Embers")

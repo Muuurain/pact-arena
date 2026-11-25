@@ -341,7 +341,9 @@ func _add_slider_row(parent: VBoxContainer, label_txt: String, key: String, def_
 
 func refresh_ui() -> void:
 	_embers_lbl.text = "深渊余烬：%d" % SaveManager.get_embers()
-	_record_lbl.text = "最高第 %d 波  ·  胜场 %d" % [int(SaveManager.meta_data.get("best_wave", 0)), int(SaveManager.meta_data.get("total_victories", 0))]
+	var best_d := SaveManager.get_best_danger_cleared()
+	var d_txt := ("D%d" % best_d) if best_d >= 0 else "未通关"
+	_record_lbl.text = "最高第 %d 波 · 胜场 %d · 最高难度 %s" % [int(SaveManager.meta_data.get("best_wave", 0)), int(SaveManager.meta_data.get("total_victories", 0)), d_txt]
 	if SaveManager.has_resume_run():
 		var r := SaveManager.load_resume_run()
 		if r != null:

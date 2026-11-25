@@ -5,6 +5,18 @@ All notable changes to **Pact Arena (血契竞技场)** will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-11-25
+
+### Changed & Rebalanced
+- **深渊难度分级系统 D0 ~ D5**：在保留 8 项自主「热度词缀」基础上新增 **6 阶核心难度（D0 试炼 ~ D5 深渊终焉）**，于出征备战界面（[HeroSelectScreen.gd](src/ui/HeroSelectScreen.gd)）横向选择，支持记忆与通关星标认证；高阶难度全面拉升敌方生命、伤害、移速、刷怪密度、精英数量、商品通胀及 Boss 护卫，同时抑制高难度波间免费回血，并提供高达 **+190%** 的深渊余烬奖励加成。
+- **后期多余血晶回收与黑市通胀模型（参考 Brotato / Hades）**：
+  - 商店新增无限次递增消费的 **「深渊黑市淬炼」** 三大消耗槽位（[ShopScreen.gd](src/ui/ShopScreen.gd) / [RunState.gd](src/core/RunState.gd)）：`深渊武器淬炼`（全伤害/暴击）、`鲜血铸体仪式`（最大生命/护甲/移速）与 `黑市遗物盲盒`（随机未禁用道具），确保大后期富余血晶可稳定转化为战力成长。
+  - 引入随波次与难度递进的商店通胀、刷新费用二次递增机制，抑制低成本无尽白嫖；下调波间利息来源并新增「黄金契约使」持有血晶增伤上限，防止滚雪球失控。
+- **战斗数值与 Boss 机制重塑（终结后期秒杀与怪死屏外）**：
+  - 紧缩高阶武器与血契的极端乘算膨胀系数，并大幅上调第 4 波以后常规怪物生命值以及第 5 波《赤潮审判官》（6,200 基础血量）、第 10 波《深渊双生主宰》（28,000 基础血量）的复合波次成长。
+  - 为高难精英怪与 Boss 加入 **韧性减伤机制（`resilience`）**（可用「血步瞬移」的破甲状态强行穿透）及 **1.2 秒入场护盾** 与击退抗性（[EnemyManager.gd](src/combat/EnemyManager.gd)）；D4/D5 下 Boss 入场携带精英裁决者侍卫。
+  - 收紧怪物出生环带至主角周围 `265–480px`（[ArenaController.gd](src/combat/ArenaController.gd)），确保怪潮进入手机视野正面交锋，不再于屏外悄然蒸发光。
+
 ## [2.0.3] - 2026-11-25
 
 ### Added & Changed

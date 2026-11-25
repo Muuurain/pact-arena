@@ -5,6 +5,7 @@ extends RefCounted
 
 var hero_id: String = "hero_crimson_blade"
 var wave: int = 1
+var danger_level: int = 0
 var endless_mode: bool = false
 var victory_reached: bool = false
 var is_run_over: bool = false
@@ -38,6 +39,7 @@ var active_heats: Array[String] = []
 var locked_shop_offers: Array[Dictionary] = []
 var shop_offers: Array[Dictionary] = []
 var shop_rerolls: int = 0
+var shop_sink_counts: Dictionary = {}
 var phase: String = "combat" # "combat" | "shop" | "pact"
 
 var stats: StatBlock = StatBlock.new()
@@ -46,8 +48,9 @@ var weapon_kills_this_run: Dictionary = {}
 var levelup_mods: Dictionary = {}
 
 
-func start_new_run(p_hero_id: String, starting_weapon_id: String, heats_list: Array[String]) -> void:
+func start_new_run(p_hero_id: String, starting_weapon_id: String, heats_list: Array[String], p_danger_level: int = 0) -> void:
 	hero_id = p_hero_id
+	danger_level = clampi(p_danger_level, 0, 5)
 	active_heats = heats_list.duplicate()
 	wave = 1
 	endless_mode = false
@@ -68,6 +71,7 @@ func start_new_run(p_hero_id: String, starting_weapon_id: String, heats_list: Ar
 	locked_shop_offers.clear()
 	shop_offers.clear()
 	shop_rerolls = 0
+	shop_sink_counts.clear()
 	weapon_kills_this_run.clear()
 	levelup_mods.clear()
 	undying_growth_waves = 0
@@ -103,8 +107,8 @@ func recompute_effective_stats() -> void:
 	if hero_id == "hero_void_weaver":
 		stats.apply_dict({"elemental_damage": 14.0, "damage_pct": 12.0})
 	elif hero_id == "hero_gilded_pactkeeper":
-		var stacks := int(crystals / 50)
-		stats.apply_dict({"damage_pct": float(stacks * 12)})
+		var stacks := mini(12, int(crystals / 60))
+		stats.apply_dict({"damage_pct": float(stacks * 10)})
 
 	# 3. Heat penalties
 	if active_heats.has("heat_fragile"):
@@ -297,25 +301,78 @@ func apply_blood_pact(pact_id: String) -> Dictionary:
 	return extra_info
 
 
-func complete_wave_economy() -> Dictionary:
-	var base_harvest := int(roundf(stats.get_stat("harvesting") * 0.8 + float(wave * 3)))
-	var interest_rate := 0.05 + SaveManager.get_talent_value("tal_interest") / 100.0
-	if hero_id == "hero_gilded_pactkeeper":
-		interest_rate += 0.15
-	if pacts.has("pact_glass_cannon"):
-		interest_rate += 0.25
-	if pacts.has("pact_time_rush"):
-		interest_rate += 0.35
+func get_shop_sink_cost(sink_id: String) -> int:
+	var sdef := GameData.get_shop_sink(sink_id)
+	if sdef.is_empty():
+		return 99999
+	var bought := int(shop_sink_counts.get(sink_id, 0))
+	var diff := GameData.get_difficulty(danger_level)
+	var danger_price := float(diff.get("shop_price_mult", 1.0))
+	return CombatFormulas.calc_shop_sink_cost(int(sdef["base_cost"]), int(sdef["step_cost"]), bought, wave, danger_price)
 
-	var interest := mini(180, int(floorf(float(crystals) * interest_rate)))
+
+func buy_shop_sink(sink_id: String) -> Dictionary:
+	var sdef := GameData.get_shop_sink(sink_id)
+	if sdef.is_empty():
+		return {"ok": false, "msg": ""}
+	var cost := get_shop_sink_cost(sink_id)
+	if crystals < cost:
+		return {"ok": false, "msg": "血晶不足"}
+
+	add_crystals(-cost)
+	shop_sink_counts[sink_id] = int(shop_sink_counts.get(sink_id, 0)) + 1
+
+	var msg := ""
+	if sink_id == "sink_mystery_relic":
+		var bans := SaveManager.get_ban_list()
+		var pool: Array[Dictionary] = []
+		for it in GameData.items:
+			if not bans.has(String(it["id"])):
+				pool.append(it)
+		if pool.is_empty():
+			pool = GameData.items
+		var picked: Dictionary = pool[randi() % pool.size()]
+		items.append(String(picked["id"]))
+		recompute_effective_stats()
+		msg = "黑市盲盒开出：【%s】(%s)" % [String(picked["name"]), String(picked["desc"])]
+	else:
+		var mods: Dictionary = sdef.get("mods", {})
+		for k in mods:
+			levelup_mods[String(k)] = float(levelup_mods.get(String(k), 0.0)) + float(mods[k])
+		recompute_effective_stats()
+		if mods.has("max_hp") and not pacts.has("pact_toxic_blood"):
+			current_hp = minf(stats.get_stat("max_hp"), current_hp + float(mods["max_hp"]))
+		msg = "%s (%s)" % [String(sdef["name"]), String(sdef["effect_text"])]
+
+	EventBus.run_state_updated.emit()
+	return {"ok": true, "msg": msg}
+
+
+func complete_wave_economy() -> Dictionary:
+	var base_harvest := int(roundf(stats.get_stat("harvesting") * 0.65 + float(wave * 4)))
+	var interest_rate := 0.04 + SaveManager.get_talent_value("tal_interest") / 100.0
+	if hero_id == "hero_gilded_pactkeeper":
+		interest_rate += 0.08
+	if pacts.has("pact_glass_cannon"):
+		interest_rate += 0.12
+	if pacts.has("pact_time_rush"):
+		interest_rate += 0.15
+
+	var interest := mini(75, int(floorf(float(crystals) * interest_rate)))
 	add_crystals(base_harvest + interest)
 
 	if pacts.has("pact_undying_sacrifice"):
 		undying_growth_waves += 1
 
-	# Full heal between waves unless Toxic Blood prevents direct heal
+	# Wave clear recovery scales with Danger Tier unless Toxic Blood prevents direct heal
 	if not pacts.has("pact_toxic_blood"):
-		current_hp = stats.get_stat("max_hp")
+		var diff := GameData.get_difficulty(danger_level)
+		var heal_ratio := float(diff.get("wave_heal_ratio", 1.0))
+		var mhp := stats.get_stat("max_hp")
+		if heal_ratio >= 0.99:
+			current_hp = mhp
+		else:
+			current_hp = minf(mhp, current_hp + mhp * heal_ratio)
 
 	return {"harvest": base_harvest, "interest": interest}
 
@@ -324,15 +381,18 @@ func calc_ember_reward() -> int:
 	var base := wave * 14 + int(total_kills / 8) + bosses_killed * 55 + elites_killed * 8
 	if victory_reached:
 		base += 45
+	var diff := GameData.get_difficulty(danger_level)
+	var diff_mult := 1.0 + float(diff.get("ember_bonus_pct", 0)) / 100.0
 	var heat_mult := 1.0 + float(active_heats.size()) * 0.25
 	var meta_mult := 1.0 + SaveManager.get_talent_value("tal_ember_gain") / 100.0
-	return maxi(10, int(roundf(float(base) * heat_mult * meta_mult)))
+	return maxi(10, int(roundf(float(base) * diff_mult * heat_mult * meta_mult)))
 
 
 func to_dict() -> Dictionary:
 	return {
 		"hero_id": hero_id,
 		"wave": wave,
+		"danger_level": danger_level,
 		"endless_mode": endless_mode,
 		"victory_reached": victory_reached,
 		"crystals": crystals,
@@ -356,6 +416,7 @@ func to_dict() -> Dictionary:
 		"locked_shop_offers": locked_shop_offers,
 		"shop_offers": shop_offers,
 		"shop_rerolls": shop_rerolls,
+		"shop_sink_counts": shop_sink_counts,
 		"phase": phase,
 		"weapon_kills_this_run": weapon_kills_this_run,
 		"levelup_mods": levelup_mods,
@@ -365,6 +426,7 @@ func to_dict() -> Dictionary:
 func from_dict(d: Dictionary) -> void:
 	hero_id = String(d.get("hero_id", "hero_crimson_blade"))
 	wave = int(d.get("wave", 1))
+	danger_level = clampi(int(d.get("danger_level", 0)), 0, 5)
 	endless_mode = bool(d.get("endless_mode", false))
 	victory_reached = bool(d.get("victory_reached", false))
 	crystals = int(d.get("crystals", 20))
@@ -401,6 +463,7 @@ func from_dict(d: Dictionary) -> void:
 	for so in d.get("shop_offers", []):
 		shop_offers.append(so)
 	shop_rerolls = int(d.get("shop_rerolls", 0))
+	shop_sink_counts = d.get("shop_sink_counts", {}).duplicate()
 	phase = String(d.get("phase", "shop"))
 	weapon_kills_this_run = d.get("weapon_kills_this_run", {}).duplicate()
 	levelup_mods = d.get("levelup_mods", {}).duplicate()

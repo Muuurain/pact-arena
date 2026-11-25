@@ -23,6 +23,8 @@ func _default_meta() -> Dictionary:
 		"weapon_kills": {},
 		"ban_list": [],
 		"selected_heats": [],
+		"selected_danger": 0,
+		"best_danger_cleared": -1,
 		"best_wave": 0,
 		"best_kills": 0,
 		"total_runs": 0,
@@ -213,6 +215,19 @@ func set_selected_heats(heats_arr: Array[String]) -> void:
 	save_meta()
 
 
+func get_selected_danger() -> int:
+	return clampi(int(meta_data.get("selected_danger", 0)), 0, 5)
+
+
+func set_selected_danger(level: int) -> void:
+	meta_data["selected_danger"] = clampi(level, 0, 5)
+	save_meta()
+
+
+func get_best_danger_cleared() -> int:
+	return int(meta_data.get("best_danger_cleared", -1))
+
+
 func get_setting(key: String, default_val: Variant = null) -> Variant:
 	var s: Dictionary = meta_data.get("settings", {})
 	return s.get(key, default_val)
@@ -266,6 +281,8 @@ func commit_run_results(run: RunState) -> Dictionary:
 	meta_data["total_runs"] = int(meta_data.get("total_runs", 0)) + 1
 	if run.victory_reached:
 		meta_data["total_victories"] = int(meta_data.get("total_victories", 0)) + 1
+		if run.danger_level > get_best_danger_cleared():
+			meta_data["best_danger_cleared"] = run.danger_level
 	if run.wave > int(meta_data.get("best_wave", 0)):
 		meta_data["best_wave"] = run.wave
 	if run.total_kills > int(meta_data.get("best_kills", 0)):

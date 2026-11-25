@@ -93,9 +93,9 @@ func _show_main_menu() -> void:
 	EventBus.bgm_requested.emit("bgm_sanctuary")
 
 
-func _start_fresh_run(hero_id: String, weapon_id: String, heats: Array[String]) -> void:
+func _start_fresh_run(hero_id: String, weapon_id: String, heats: Array[String], danger_level: int = 0) -> void:
 	_run = RunState.new()
-	_run.start_new_run(hero_id, weapon_id, heats)
+	_run.start_new_run(hero_id, weapon_id, heats, danger_level)
 	SaveManager.active_run = _run
 	_enter_combat()
 

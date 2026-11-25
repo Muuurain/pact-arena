@@ -103,13 +103,13 @@ func spawn_enemy(enemy_id: String, world_pos: Vector2, wave: int, is_mini: bool 
 		return {}
 
 	var is_boss := enemy_id.begins_with("boss_")
-	var wave_scale := 1.0 + float(maxi(0, wave - 1)) * 0.24 + pow(float(maxi(0, wave - 1)), 1.35) * 0.06
-	if wave > 10:
-		wave_scale *= pow(1.22, float(wave - 10))
+	var wave_scale := CombatFormulas.calc_enemy_wave_scale(wave)
 
-	var hp_mult := 1.0
-	var spd_mult := 1.0
-	var dmg_mult := 1.0
+	var danger_lvl := _run.danger_level if _run != null else 0
+	var diff := GameData.get_difficulty(danger_lvl)
+	var hp_mult := float(diff.get("enemy_hp_mult", 1.0))
+	var spd_mult := float(diff.get("enemy_speed_mult", 1.0)) * (1.0 + minf(0.28, float(maxi(0, wave - 1)) * 0.025))
+	var dmg_mult := float(diff.get("enemy_dmg_mult", 1.0))
 	if _run != null:
 		if _run.active_heats.has("heat_hp"):
 			hp_mult *= 1.22
@@ -126,7 +126,7 @@ func spawn_enemy(enemy_id: String, world_pos: Vector2, wave: int, is_mini: bool 
 
 	var max_hp := float(edef["hp"]) * wave_scale * hp_mult * (0.42 if is_mini else 1.0)
 	if is_boss:
-		max_hp = float(edef["hp"]) * (1.0 + float(maxi(0, wave - 5)) * 0.26) * hp_mult
+		max_hp = float(edef["hp"]) * CombatFormulas.calc_boss_wave_scale(wave, enemy_id) * hp_mult
 
 	_uid_counter += 1
 	slot["alive"] = true
@@ -138,13 +138,18 @@ func spawn_enemy(enemy_id: String, world_pos: Vector2, wave: int, is_mini: bool 
 	slot["hp"] = max_hp
 	slot["max_hp"] = max_hp
 	slot["speed"] = float(edef["speed"]) * spd_mult * (1.28 if is_mini else 1.0)
-	slot["damage"] = float(edef["damage"]) * (1.0 + float(wave - 1) * 0.08) * dmg_mult * (0.65 if is_mini else 1.0)
+	slot["damage"] = float(edef["damage"]) * (1.0 + float(wave - 1) * 0.11) * dmg_mult * (0.65 if is_mini else 1.0)
 	slot["radius"] = float(edef["radius"]) * (0.68 if is_mini else 1.0)
 	slot["xp"] = float(edef["xp"]) * (0.45 if is_mini else 1.0)
-	slot["crystals"] = maxi(1, int(roundf(float(edef["crystals"]) * (0.5 if is_mini else 1.0))))
+	var base_crystals := int(edef["crystals"])
+	if enemy_id == "swarmer" and wave >= 4:
+		base_crystals = 1
+	slot["crystals"] = maxi(1, int(roundf(float(base_crystals) * (0.5 if is_mini else 1.0))))
 	slot["is_boss"] = is_boss
 	slot["is_elite"] = enemy_id == "elite_warden"
 	slot["is_mini"] = is_mini
+	slot["resilience"] = CombatFormulas.calc_enemy_armor_resilience(danger_lvl, is_boss, enemy_id == "elite_warden")
+	slot["spawn_shield_timer"] = 1.2 if is_boss else 0.0
 	slot["facing"] = Vector2.LEFT
 
 	# Status & AI timers
@@ -240,6 +245,8 @@ func step(delta: float) -> void:
 		if float(e["flash_timer"]) > 0.0:
 			e["flash_timer"] = maxf(0.0, float(e["flash_timer"]) - delta)
 			(e["mat"] as ShaderMaterial).set_shader_parameter("flash_amount", float(e["flash_timer"]) / 0.11)
+		if float(e.get("spawn_shield_timer", 0.0)) > 0.0:
+			e["spawn_shield_timer"] = maxf(0.0, float(e["spawn_shield_timer"]) - delta)
 
 		if float(e["armor_break_timer"]) > 0.0:
 			e["armor_break_timer"] = maxf(0.0, float(e["armor_break_timer"]) - delta)
@@ -530,13 +537,16 @@ func apply_hit_to_enemy(
 	if float(e["curse_timer"]) > 0.0:
 		vuln += maxf(0.12, float(flags.get("curse_vuln", 0.12)))
 
-	var final_dmg := CombatFormulas.calc_enemy_damage_after_vuln(raw_dmg, vuln, float(e["armor_break_timer"]) > 0.0, shield_factor)
+	var res := float(e.get("resilience", 0.0))
+	var final_dmg := CombatFormulas.calc_enemy_damage_after_vuln(raw_dmg, vuln, float(e["armor_break_timer"]) > 0.0, shield_factor, res)
+	if float(e.get("spawn_shield_timer", 0.0)) > 0.0:
+		final_dmg *= 0.45
 
 	e["hp"] = float(e["hp"]) - final_dmg
 	e["flash_timer"] = 0.11
 	e["hit_squash"] = 1.0
 
-	var kb_resist := 0.20 if bool(e["is_boss"]) else (0.45 if bool(e["is_elite"]) or String(e["id"]) == "brute" else 1.0)
+	var kb_resist := 0.08 if bool(e["is_boss"]) else (0.35 if bool(e["is_elite"]) or String(e["id"]) == "brute" else 0.90)
 	e["vel"] = Vector2(e["vel"]) + knockback_vec * kb_resist
 
 	if chill or bool(flags.get("chill_on_hit", false)):

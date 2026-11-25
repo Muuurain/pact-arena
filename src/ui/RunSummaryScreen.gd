@@ -112,10 +112,12 @@ func show_final_summary(run: RunState, commit_report: Dictionary) -> void:
 
 func _format_stats_summary(run: RunState, embers: int, unlocked: Array) -> String:
 	var hdef := GameData.get_hero(run.hero_id)
+	var ddef: Dictionary = GameData.get_difficulty(run.danger_level)
+	var d_ember := int(ddef.get("ember_bonus_pct", 0))
 	var lines: Array[String] = [
-		"出战英雄：%s" % String(hdef.get("name", "")),
+		"出战英雄：%s  |  挑战难度：%s" % [String(hdef.get("name", "")), String(ddef.get("name", "试炼 (D0)"))],
 		"推进波次：第 %d 波  |  总击杀：%d  |  精英/首领：%d / %d" % [run.wave, run.total_kills, run.elites_killed, run.bosses_killed],
-		"热度词缀：%d 项 (余烬倍率 +%d%%)" % [run.active_heats.size(), run.active_heats.size() * 25],
+		"难度加成 +%d%%  |  热度词缀：%d 项 (+%d%%)" % [d_ember, run.active_heats.size(), run.active_heats.size() * 25],
 		"预估结算余烬：%d" % embers,
 		"",
 		"已签血契（%d）：" % run.pacts.size(),

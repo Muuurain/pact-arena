@@ -471,7 +471,8 @@ func _on_crystals_changed(amount: int) -> void:
 
 
 func _on_wave_changed(wave: int, time_left: float, _total: float, kills: int) -> void:
-	_wave_lbl.text = ("无尽第 %d 波" % wave) if (_run != null and _run.endless_mode) else ("第 %d / 10 波" % wave)
+	var d_tag := ("D%d · " % _run.danger_level) if _run != null else ""
+	_wave_lbl.text = (d_tag + ("无尽第 %d 波" % wave)) if (_run != null and _run.endless_mode) else (d_tag + ("第 %d / 10 波" % wave))
 	_timer_lbl.text = "%ds" % int(ceilf(time_left))
 	_kills_lbl.text = "击杀: %d" % kills
 

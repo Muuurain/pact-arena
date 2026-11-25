@@ -4,16 +4,19 @@ extends Control
 ## early Ember unlock for challenge heroes, and Heat 0..8 protocol toggles.
 
 signal back_requested()
-signal launch_run_requested(hero_id: String, weapon_id: String, heats: Array[String])
+signal launch_run_requested(hero_id: String, weapon_id: String, heats: Array[String], danger_level: int)
 
 var _selected_hero: String = "hero_crimson_blade"
 var _selected_weapon: String = ""
 var _selected_heats: Array[String] = []
+var _selected_danger: int = 0
 var _heat_open: bool = false
 
 var _embers_lbl: Label
 var _hero_list: VBoxContainer
 var _weapon_box: HBoxContainer
+var _danger_box: HBoxContainer
+var _danger_desc_lbl: Label
 var _heat_panel: PanelContainer
 var _heat_grid: GridContainer
 var _heat_toggle_btn: Button
@@ -96,6 +99,28 @@ func _build_ui() -> void:
 	_weapon_box.add_theme_constant_override("separation", 8)
 	w_scroll.add_child(_weapon_box)
 
+	# Difficulty / Danger Selector (D0 ~ D5)
+	var d_lbl := Label.new()
+	d_lbl.text = "深渊难度分级 (D0 ~ D5 · 全面调节敌方血量、速度、密度与余烬收益)："
+	d_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	d_lbl.add_theme_font_size_override("font_size", 15)
+	d_lbl.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
+	root_v.add_child(d_lbl)
+
+	var d_scroll := TouchScrollContainer.new()
+	d_scroll.custom_minimum_size.y = 68
+	d_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root_v.add_child(d_scroll)
+
+	_danger_box = HBoxContainer.new()
+	_danger_box.add_theme_constant_override("separation", 8)
+	d_scroll.add_child(_danger_box)
+
+	_danger_desc_lbl = Label.new()
+	_danger_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_danger_desc_lbl.add_theme_font_size_override("font_size", 14)
+	root_v.add_child(_danger_desc_lbl)
+
 	# Heat Modifiers Drawer
 	_heat_toggle_btn = Button.new()
 	UiStyles.style_button(_heat_toggle_btn, UiStyles.COL_VOID, false, 46.0)
@@ -125,15 +150,17 @@ func _build_ui() -> void:
 		if not SaveManager.is_hero_unlocked(_selected_hero):
 			return
 		SaveManager.set_selected_heats(_selected_heats)
+		SaveManager.set_selected_danger(_selected_danger)
 		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
 		visible = false
-		launch_run_requested.emit(_selected_hero, _selected_weapon, _selected_heats)
+		launch_run_requested.emit(_selected_hero, _selected_weapon, _selected_heats, _selected_danger)
 	)
 	root_v.add_child(_start_btn)
 
 
 func open() -> void:
 	_selected_heats = SaveManager.get_selected_heats()
+	_selected_danger = SaveManager.get_selected_danger()
 	if _selected_weapon.is_empty():
 		_selected_weapon = String(GameData.get_hero(_selected_hero).get("default_weapon", "wpn_chainsaw"))
 	refresh_ui()
@@ -216,6 +243,7 @@ func refresh_ui() -> void:
 			hbox.add_child(unl_btn)
 
 	_rebuild_weapon_bar()
+	_rebuild_danger_bar()
 	_rebuild_heats()
 	_start_btn.disabled = not SaveManager.is_hero_unlocked(_selected_hero)
 
@@ -242,6 +270,33 @@ func _rebuild_weapon_bar() -> void:
 			_rebuild_weapon_bar()
 		)
 		_weapon_box.add_child(btn)
+
+
+func _rebuild_danger_bar() -> void:
+	for c in _danger_box.get_children():
+		_danger_box.remove_child(c)
+		c.queue_free()
+	var best_cleared := SaveManager.get_best_danger_cleared()
+	for d in GameData.difficulties:
+		var lvl := int(d.get("level", 0))
+		var is_sel := (lvl == _selected_danger)
+		var dcol := Color(d.get("color", UiStyles.COL_CRIMSON))
+		var btn := Button.new()
+		var cleared_tag := "★已通关" if lvl <= best_cleared else ("余烬+%d%%" % int(d.get("ember_bonus_pct", 0)))
+		btn.text = "%s\n%s" % [String(d.get("short_name", "D%d" % lvl)), cleared_tag]
+		btn.custom_minimum_size = Vector2(106, 56)
+		UiStyles.style_button(btn, dcol, is_sel, 56.0)
+		btn.add_theme_font_size_override("font_size", 14)
+		btn.pressed.connect(func():
+			_selected_danger = lvl
+			EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
+			_rebuild_danger_bar()
+		)
+		_danger_box.add_child(btn)
+	var cur := GameData.get_difficulty(_selected_danger)
+	var ccol := Color(cur.get("color", UiStyles.COL_TEXT_DIM))
+	_danger_desc_lbl.add_theme_color_override("font_color", ccol)
+	_danger_desc_lbl.text = "【%s】%s" % [String(cur.get("name", "D0")), String(cur.get("desc", ""))]
 
 
 func _rebuild_heats() -> void:
