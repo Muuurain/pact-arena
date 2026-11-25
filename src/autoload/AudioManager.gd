@@ -76,6 +76,8 @@ func play_bgm(track_id: String) -> void:
 	var stream := _get_stream("res://assets/audio/bgm/%s.ogg" % track_id)
 	if stream == null:
 		return
+	if stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
 	apply_volumes()
 	_bgm_player.stream = stream
 	_bgm_player.play()

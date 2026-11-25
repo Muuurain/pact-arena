@@ -48,6 +48,18 @@ func _test_catalog_completeness() -> void:
 	_assert(GameData.heats.size() == 8, "8 Heat protocols loaded")
 	_assert(GameData.enemies.size() == 10, "8 enemy types + 2 Bosses loaded")
 
+	var sfx_dir := DirAccess.open("res://assets/audio/sfx")
+	var sfx_oggs: Array[String] = []
+	if sfx_dir != null:
+		for f in sfx_dir.get_files():
+			if f.ends_with(".ogg"):
+				sfx_oggs.append(f)
+				_assert(load("res://assets/audio/sfx/" + f) != null, "Audio SFX loads: " + f)
+	_assert(sfx_oggs.size() == 27, "All 27 SFX OGG assets present and loadable")
+	for bgm_f in ["bgm_sanctuary.ogg", "bgm_combat.ogg", "bgm_boss.ogg"]:
+		var stream := load("res://assets/audio/bgm/" + bgm_f) as AudioStreamOggVorbis
+		_assert(stream != null and stream.has_loop(), "Audio BGM loads with seamless loop enabled: " + bgm_f)
+
 
 func _test_stat_bounds_and_pacts() -> void:
 	var run := RunState.new()

@@ -5,6 +5,19 @@ All notable changes to **Pact Arena (血契竞技场)** will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2026-11-25
+
+### Added & Changed
+- **场景状态自适应 BGM 套装 v01 落地**：按 [bgm_arena_soundtrack_loop_set_v01_prompt.md](docs/bgm_arena_soundtrack_loop_set_v01_prompt.md) 规格生成并导入三首纯器乐循环配乐——圣所整备 `sanctuary`、常规波次 `combat`、Boss 决战 `boss`；统一 `128 BPM` / `4/4` / `D 小调` / `≈90 s`，44100 Hz 立体声、160 kbps Vorbis，-15.5 LUFS、真峰值 ≤ -1.0 dBTP，1.6 s 等功率首尾交叉淡化无缝循环，替换原程序化临时占位 BGM。
+- **后期导入管线升级**（[import_bgm.py](tools/import_bgm.py)）：新增 EBU R128 双通响度归一与真峰值限制、44.1 kHz 16-bit PCM 母带归档、v01 长名与引擎兼容短名双份 OGG 落盘；-60 dBFS 二次深静音裁边、首 20 ms 微淡入防 onset 咔哒、160 kbps ABR 码率锁定；验收报告覆盖集成响度 / 真峰值 / 时长 / 首尾静音 / 码率 / 曲目间响度差。
+
+## [2.1.0] - 2026-11-25
+
+### Improved & Added
+- **全套立体声战斗与 UI 短音效重构（27 项）**：升级 [generate_audio.py](tools/generate_audio.py) 为 44.1 kHz 双声道立体声物理/FM 合成管线（`fft_filter` 频谱塑形、`fm_strike` 非谐波金属泛音、`stereo_chorus_sweep` 声场展宽、`saturate` 饱和激励与 `add_early_room` 早期空间混响），全面重做武器开火、暴击、破甲、血步、拾取、祭坛、Boss 预警及 UI 点击手感音效。
+- **全面实装豆包 AI 定制高保真主题配乐（3 首 BGM）**：基于 13 章节规范文档 [bgm_arena_soundtrack_loop_set_v01_prompt.md](docs/bgm_arena_soundtrack_loop_set_v01_prompt.md) 与 [import_bgm.py](tools/import_bgm.py)，将三首 ~90 秒、44.1 kHz 立体声 `-15.5 LUFS` 纯器乐原声（`bgm_sanctuary`、`bgm_combat`、`bgm_boss`）接入运行库并开启底层 `loop=true` 无缝循环。
+- **测试校验增强**：在 [TestSuite.gd](tests/TestSuite.gd) 中增加全部 27 个 `.ogg` 短音效与 3 首无缝循环 BGM 的加载校验断言。
+
 ## [2.0.2] - 2026-11-25
 
 ### Improved & Fixed
