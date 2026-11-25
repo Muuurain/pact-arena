@@ -69,6 +69,15 @@ func _test_stat_bounds_and_pacts() -> void:
 	lone_run.apply_blood_pact("pact_lone_wolf")
 	_assert(lone_run.max_weapons == 5, "Lone Wolf reduces max_weapons by 1")
 
+	var undying_run := RunState.new()
+	undying_run.start_new_run("hero_one_arm_asura", "wpn_chainsaw", [])
+	undying_run.weapons[0]["tier"] = 3
+	var hp_before_undying := undying_run.stats.get_stat("max_hp")
+	undying_run.apply_blood_pact("pact_undying_sacrifice")
+	_assert(int(undying_run.weapons[0]["tier"]) == 3, "Undying Sacrifice preserves equipped weapon tiers")
+	_assert(undying_run.revives_left == 1, "Undying Sacrifice grants 1 revive")
+	_assert(undying_run.stats.get_stat("max_hp") < hp_before_undying, "Undying Sacrifice applies -10% max HP cost")
+
 
 func _test_synergies_and_dual_resonances() -> void:
 	var run := RunState.new()
@@ -93,6 +102,32 @@ func _test_weapon_merge_and_awakening() -> void:
 	_assert(bool(res["success"]), "Tier 3 + Tier 3 merges cleanly")
 	_assert(int(run.weapons[0]["tier"]) == 4, "Merged weapon reaches Tier 4")
 	_assert(int(res["awakened_slot"]) == 0, "Tier 4 triggers awakening slot 0")
+
+	var asura := RunState.new()
+	asura.start_new_run("hero_one_arm_asura", "wpn_chainsaw", [])
+	_assert(asura.max_weapons == 1, "One-Arm Asura has max_weapons == 1")
+	var chk_up := asura.can_add_or_merge_weapon("wpn_chainsaw", 2)
+	_assert(bool(chk_up["ok"]) and String(chk_up["mode"]) == "replace", "Higher-tier same weapon enables replace mode on full 1-slot hero")
+	var chk_other := asura.can_add_or_merge_weapon("wpn_battleaxe", 3)
+	_assert(not bool(chk_other["ok"]), "Different weapon still blocked when 1-slot hero is full")
+	var rep2 := asura.add_or_merge_weapon("wpn_chainsaw", 2)
+	_assert(bool(rep2["success"]) and asura.weapons.size() == 1 and int(asura.weapons[0]["tier"]) == 2, "Replacing Tier 1 with Tier 2 upgrades slot 0 directly")
+	var chk_low := asura.can_add_or_merge_weapon("wpn_chainsaw", 1)
+	_assert(not bool(chk_low["ok"]), "Lower-tier same weapon cannot replace higher-tier equipped weapon")
+	var rep4 := asura.add_or_merge_weapon("wpn_chainsaw", 4)
+	_assert(bool(rep4["success"]) and int(asura.weapons[0]["tier"]) == 4 and int(rep4["awakened_slot"]) == 0, "Replacing with Tier 4 triggers awakening slot 0")
+
+	var full_run := RunState.new()
+	full_run.start_new_run("hero_crimson_blade", "wpn_chainsaw", [])
+	full_run.add_or_merge_weapon("wpn_chainsaw", 2)
+	full_run.add_or_merge_weapon("wpn_battleaxe", 1)
+	full_run.add_or_merge_weapon("wpn_arc_staff", 1)
+	full_run.add_or_merge_weapon("wpn_ice_prism", 1)
+	full_run.add_or_merge_weapon("wpn_bone_spear", 1)
+	var chk_full := full_run.can_add_or_merge_weapon("wpn_chainsaw", 3)
+	_assert(bool(chk_full["ok"]) and String(chk_full["mode"]) == "replace" and int(chk_full["merge_idx"]) == 0, "Full 6/6 loadout replaces lowest-tier matching weapon")
+	full_run.add_or_merge_weapon("wpn_chainsaw", 3)
+	_assert(int(full_run.weapons[0]["tier"]) == 3 and int(full_run.weapons[1]["tier"]) == 2, "Lowest-tier duplicate upgraded to Tier 3 while preserving Tier 2 copy")
 
 
 func _test_shop_and_save_persistence() -> void:
@@ -190,6 +225,14 @@ func _test_full_ui_and_combat_integration() -> void:
 
 	inst._shop.open_for_run(run, true)
 	_assert(inst._shop.visible, "ShopScreen opens cleanly")
+	inst._shop.visible = false
+
+	var asura_shop := RunState.new()
+	asura_shop.start_new_run("hero_one_arm_asura", "wpn_chainsaw", [])
+	asura_shop.add_crystals(500)
+	asura_shop.shop_offers = [{"kind": "weapon", "id": "wpn_chainsaw", "tier": 2, "price": 80, "locked": false, "sold": false}]
+	inst._shop.open_for_run(asura_shop, false)
+	_assert(inst._shop.visible, "ShopScreen renders One-Arm Asura higher-tier replace offer cleanly")
 	inst._shop.visible = false
 
 	inst._awakening_modal.open_for_weapon(0, "wpn_chainsaw")

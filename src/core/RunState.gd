@@ -185,7 +185,7 @@ func add_xp(amount: float) -> void:
 
 
 func can_add_or_merge_weapon(weapon_id: String, tier: int) -> Dictionary:
-	# Returns {"ok": bool, "mode": "merge"|"equip"|"full", "merge_idx": int}
+	# Returns {"ok": bool, "mode": "merge"|"equip"|"replace"|"full", "merge_idx": int}
 	if tier < 4:
 		for i in range(weapons.size()):
 			var w: Dictionary = weapons[i]
@@ -193,6 +193,17 @@ func can_add_or_merge_weapon(weapon_id: String, tier: int) -> Dictionary:
 				return {"ok": true, "mode": "merge", "merge_idx": i}
 	if weapons.size() < max_weapons:
 		return {"ok": true, "mode": "equip", "merge_idx": -1}
+	var best_replace_idx := -1
+	var lowest_tier := tier
+	for i in range(weapons.size()):
+		var w: Dictionary = weapons[i]
+		if String(w["id"]) == weapon_id:
+			var existing_tier := int(w["tier"])
+			if existing_tier < lowest_tier:
+				lowest_tier = existing_tier
+				best_replace_idx = i
+	if best_replace_idx != -1:
+		return {"ok": true, "mode": "replace", "merge_idx": best_replace_idx}
 	return {"ok": false, "mode": "full", "merge_idx": -1}
 
 
@@ -201,11 +212,17 @@ func add_or_merge_weapon(weapon_id: String, tier: int) -> Dictionary:
 	if not bool(chk["ok"]):
 		return {"success": false, "awakened_slot": -1}
 	var awakened_slot := -1
-	if String(chk["mode"]) == "merge":
+	var mode := String(chk["mode"])
+	if mode == "merge":
 		var idx := int(chk["merge_idx"])
 		var new_tier := mini(4, int(weapons[idx]["tier"]) + 1)
 		weapons[idx]["tier"] = new_tier
 		if new_tier == 4 and String(weapons[idx].get("awakening", "")).is_empty():
+			awakened_slot = idx
+	elif mode == "replace":
+		var idx := int(chk["merge_idx"])
+		weapons[idx] = {"id": weapon_id, "tier": tier, "awakening": ""}
+		if tier == 4:
 			awakened_slot = idx
 	else:
 		weapons.append({"id": weapon_id, "tier": tier, "awakening": ""})
@@ -274,8 +291,6 @@ func apply_blood_pact(pact_id: String) -> Dictionary:
 		extra_info["gift_weapon"] = String(pick["name"])
 	elif pact_id == "pact_undying_sacrifice":
 		revives_left += 1
-		for i in range(weapons.size()):
-			weapons[i]["tier"] = maxi(1, int(weapons[i]["tier"]) - 1)
 
 	recompute_effective_stats()
 	EventBus.run_state_updated.emit()

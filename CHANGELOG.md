@@ -5,6 +5,12 @@ All notable changes to **Pact Arena (血契竞技场)** will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-11-25
+
+### Fixed
+- **高阶武器直接替换机制（修复「独臂修罗」武器锁死问题）**：当武器槽位已满（包含单槽位英雄「独臂修罗」）且商店刷新出高于现有同种武器阶级的商品时，新增 `replace` 替换模式，商店卡片将高亮显示 `▲可替换升阶!` 与 `替换 $价格`，可直接购买并替换队内最低阶的同款武器（替换为 IV 阶红武时正常触发觉醒选择）。
+- **修复血契「不灭献祭」隐藏降阶 Bug**：移除 `pact_undying_sacrifice` 中未在文案说明的「全武器阶级 -1」惩罚逻辑，使其效果与描述完全一致（全伤害暂时 -15%、当前生命上限 -10%、获得 1 次深渊免死复活护佑，且每波自动成长 +8% 伤害）。
+
 ## [2.0.0] - 2026-11-25
 
 ### Changed & Improved

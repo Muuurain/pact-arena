@@ -385,6 +385,7 @@ func _rebuild_offers() -> void:
 		var price := int(offer["price"])
 		var locked := bool(offer.get("locked", false))
 		var can_merge := false
+		var can_replace := false
 		var can_buy := _run.crystals >= price
 
 		var card := PanelContainer.new()
@@ -398,9 +399,12 @@ func _rebuild_offers() -> void:
 		if is_w:
 			var wdef := GameData.get_weapon(String(offer["id"]))
 			var chk := _run.can_add_or_merge_weapon(String(offer["id"]), tier)
-			can_merge = String(chk["mode"]) == "merge"
+			var mode := String(chk["mode"])
+			can_merge = mode == "merge"
+			can_replace = mode == "replace"
 			can_buy = can_buy and bool(chk["ok"])
-			card.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, UiStyles.COL_GOLD if can_merge else tcol, 14, 3 if can_merge else 2))
+			var border_col: Color = UiStyles.COL_GOLD if can_merge else (UiStyles.COL_AZURE if can_replace else tcol)
+			card.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, border_col, 14, 3 if (can_merge or can_replace) else 2))
 
 			var top_row := HBoxContainer.new()
 			cv.add_child(top_row)
@@ -422,9 +426,9 @@ func _rebuild_offers() -> void:
 			tv.add_child(nl)
 
 			var tag_l := Label.new()
-			tag_l.text = ("★可合成升阶!" if can_merge else UiStyles.faction_name(String(wdef["faction"])) + "系")
+			tag_l.text = ("★可合成升阶!" if can_merge else ("▲可替换升阶!" if can_replace else UiStyles.faction_name(String(wdef["faction"])) + "系"))
 			tag_l.add_theme_font_size_override("font_size", 13)
-			tag_l.add_theme_color_override("font_color", UiStyles.COL_GOLD if can_merge else UiStyles.faction_color(String(wdef["faction"])))
+			tag_l.add_theme_color_override("font_color", UiStyles.COL_GOLD if can_merge else (UiStyles.COL_AZURE if can_replace else UiStyles.faction_color(String(wdef["faction"]))))
 			tv.add_child(tag_l)
 
 			var dl := Label.new()
@@ -470,9 +474,9 @@ func _rebuild_offers() -> void:
 
 		var buy_btn := Button.new()
 		buy_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		buy_btn.text = "合成 $%d" % price if can_merge else "购买 $%d" % price
+		buy_btn.text = "合成 $%d" % price if can_merge else ("替换 $%d" % price if can_replace else "购买 $%d" % price)
 		buy_btn.disabled = not can_buy
-		UiStyles.style_button(buy_btn, UiStyles.COL_GOLD if can_merge else UiStyles.COL_EMERALD, true, 42.0)
+		UiStyles.style_button(buy_btn, UiStyles.COL_GOLD if can_merge else (UiStyles.COL_AZURE if can_replace else UiStyles.COL_EMERALD), true, 42.0)
 		buy_btn.add_theme_font_size_override("font_size", 16)
 		buy_btn.pressed.connect(func(): _buy_offer(idx))
 		btn_h.add_child(buy_btn)
