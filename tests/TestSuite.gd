@@ -44,12 +44,16 @@ func _test_catalog_completeness() -> void:
 		_assert((w["awakenings"] as Array).size() == 2, "Weapon %s has 2 awakenings" % w["id"])
 		_assert(ResourceLoader.exists(String(w["sprite"])), "Weapon sprite exists: %s" % w["sprite"])
 	_assert(GameData.items.size() == 18, "18 passive items loaded")
+	for it in GameData.items:
+		_assert(ResourceLoader.exists(String(it.get("sprite", ""))), "Item sprite exists: %s" % it.get("sprite", ""))
 	_assert(GameData.pacts.size() == 10, "10 Blood Pacts loaded")
 	_assert(GameData.talents.size() == 12, "12 Sanctuary talents loaded")
 	_assert(GameData.heats.size() == 8, "8 Heat protocols loaded")
 	_assert(GameData.enemies.size() == 10, "8 enemy types + 2 Bosses loaded")
 	_assert(GameData.difficulties.size() == 6, "6 Difficulty tiers (D0..D5) loaded")
 	_assert(GameData.shop_sinks.size() == 3, "3 Shop crystal sinks loaded")
+	for sk in GameData.shop_sinks:
+		_assert(ResourceLoader.exists(String(sk.get("sprite", ""))), "Shop sink sprite exists: %s" % sk.get("sprite", ""))
 
 	var sfx_dir := DirAccess.open("res://assets/audio/sfx")
 	var sfx_oggs: Array[String] = []

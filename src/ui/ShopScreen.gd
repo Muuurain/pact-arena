@@ -503,11 +503,32 @@ func _rebuild_offers() -> void:
 		else:
 			var idef := GameData.get_item(String(offer["id"]))
 			card.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, tcol, 14, 2))
+			var top_row := HBoxContainer.new()
+			top_row.add_theme_constant_override("separation", 8)
+			cv.add_child(top_row)
+
+			var icon := TextureRect.new()
+			icon.texture = load(String(idef.get("sprite", "")))
+			icon.custom_minimum_size = Vector2(62, 62)
+			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			top_row.add_child(icon)
+
+			var tv := VBoxContainer.new()
+			tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			top_row.add_child(tv)
+
 			var nl := Label.new()
-			nl.text = "[道具] " + String(idef["name"])
-			nl.add_theme_font_size_override("font_size", 17)
+			nl.text = String(idef["name"])
+			nl.add_theme_font_size_override("font_size", 16)
 			nl.add_theme_color_override("font_color", tcol)
-			cv.add_child(nl)
+			tv.add_child(nl)
+
+			var tag_l := Label.new()
+			tag_l.text = "被动道具 · %s阶" % UiStyles.tier_name(tier)
+			tag_l.add_theme_font_size_override("font_size", 13)
+			tag_l.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
+			tv.add_child(tag_l)
 
 			var dl := Label.new()
 			dl.text = String(idef["desc"])
@@ -616,6 +637,13 @@ func _rebuild_sinks() -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
 		card.add_child(row)
+
+		var icon := TextureRect.new()
+		icon.texture = load(String(s.get("sprite", "")))
+		icon.custom_minimum_size = Vector2(54, 54)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		row.add_child(icon)
 
 		var tv := VBoxContainer.new()
 		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL

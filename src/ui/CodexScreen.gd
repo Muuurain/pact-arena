@@ -161,18 +161,37 @@ func refresh_ui() -> void:
 	for it in GameData.items:
 		var iid := String(it["id"])
 		var is_banned := bans.has(iid)
+		var itcol := UiStyles.tier_color(int(it["tier"]))
 		var card := PanelContainer.new()
-		card.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, Color(0.45, 0.25, 0.25) if is_banned else UiStyles.tier_color(int(it["tier"])), 12, 1))
+		card.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, Color(0.45, 0.25, 0.25) if is_banned else itcol, 12, 1))
 		_list_box.add_child(card)
 		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 10)
 		card.add_child(h)
 
+		var icon := TextureRect.new()
+		icon.texture = load(String(it.get("sprite", "")))
+		icon.custom_minimum_size = Vector2(58, 58)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		h.add_child(icon)
+
+		var tv := VBoxContainer.new()
+		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		h.add_child(tv)
+
+		var nl := Label.new()
+		nl.text = "%s [%s阶]" % [String(it["name"]), UiStyles.tier_name(int(it["tier"]))]
+		nl.add_theme_font_size_override("font_size", 16)
+		nl.add_theme_color_override("font_color", itcol)
+		tv.add_child(nl)
+
 		var l := Label.new()
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		l.text = "%s：%s" % [String(it["name"]), String(it["desc"])]
+		l.text = String(it["desc"])
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		l.add_theme_font_size_override("font_size", 14)
-		h.add_child(l)
+		l.add_theme_font_size_override("font_size", 13)
+		l.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
+		tv.add_child(l)
 
 		if max_bans > 0:
 			var bbtn := Button.new()

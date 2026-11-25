@@ -5,6 +5,14 @@ All notable changes to **Pact Arena (血契竞技场)** will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-11-25
+
+### Added & Improved
+- **全套 18 种被动道具与 3 项黑市淬炼服务 Nano Banana 专属图标**：
+  - 使用 **Nano Banana** 生成全套暗黑赛博金属与魔导风格道具图集，并通过 [process_nano_assets.py](tools/process_nano_assets.py) 完成背景透明抠图、去白边/黑晕与居中缩放，输出 21 张 `128×128` 透明 PNG 精灵至 [assets/art/sprites/items](assets/art/sprites/items)。
+  - **界面全面实装图标展示**：[ShopScreen.gd](src/ui/ShopScreen.gd)（道具货架卡片 `62×62` 与黑市淬炼卡片 `54×54`）、[CodexScreen.gd](src/ui/CodexScreen.gd)（18 种道具图鉴 `58×58`）与 [LevelUpModal.gd](src/ui/LevelUpModal.gd)（宝箱开出道具弹窗 `78×78`）均已接入配套图标渲染。
+  - **资源校验增强**：[TestSuite.gd](tests/TestSuite.gd) 新增全部 18 种道具与 3 项黑市淬炼服务的 `ResourceLoader.exists()` 加载断言。
+
 ## [2.2.0] - 2026-11-25
 
 ### Changed & Rebalanced

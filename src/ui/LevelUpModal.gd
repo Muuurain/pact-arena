@@ -85,17 +85,32 @@ func _show_chest() -> void:
 	cv.add_theme_constant_override("separation", 10)
 	card.add_child(cv)
 
+	var top_h := HBoxContainer.new()
+	top_h.add_theme_constant_override("separation", 12)
+	cv.add_child(top_h)
+
+	var icon := TextureRect.new()
+	icon.texture = load(String(it.get("sprite", "")))
+	icon.custom_minimum_size = Vector2(78, 78)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	top_h.add_child(icon)
+
+	var info_v := VBoxContainer.new()
+	info_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_h.add_child(info_v)
+
 	var n := Label.new()
 	n.text = "获得道具：【%s】" % String(it["name"])
 	n.add_theme_font_size_override("font_size", 24)
 	n.add_theme_color_override("font_color", UiStyles.COL_GOLD)
-	cv.add_child(n)
+	info_v.add_child(n)
 
 	var d := Label.new()
 	d.text = String(it["desc"]) + "\n额外获得 +%d 血晶！" % bonus_crystals
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	d.add_theme_font_size_override("font_size", 19)
-	cv.add_child(d)
+	d.add_theme_font_size_override("font_size", 18)
+	info_v.add_child(d)
 
 	var btn := Button.new()
 	btn.text = "收入囊中"
