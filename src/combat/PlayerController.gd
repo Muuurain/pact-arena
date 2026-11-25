@@ -1,19 +1,28 @@
 class_name PlayerController
 extends Node2D
-## Handles player movement, 2-charge Blood Dash (with armor-break + melee reset),
-## regen/toxic blood conversion, dodge mitigation, invulnerability frames, and revives.
+## Handles player movement, animated breathing/running/dash squash-and-stretch,
+## 2-charge Blood Dash with real-time cooldown countdown, regen/toxic blood conversion,
+## dodge mitigation, invulnerability frames, and revives.
 
 signal player_died()
+
+const BASE_SPRITE_SCALE := 0.48
 
 var _run: RunState
 var _enemy_mgr: EnemyManager
 var _vfx: VfxManager
 var _weapon_rig: WeaponRig
 
+var _visual_root: Node2D
+var _shadow: Sprite2D
 var _sprite: Sprite2D
 var _dash_ring: Sprite2D
+
 var _input_dir: Vector2 = Vector2.ZERO
 var _last_move_dir: Vector2 = Vector2.RIGHT
+var _anim_time: float = 0.0
+var _step_dust_timer: float = 0.0
+var _hurt_punch: float = 0.0
 
 var _dash_charges: int = 2
 var _max_dash_charges: int = 2
@@ -30,10 +39,13 @@ var _toxic_accum: float = 0.0
 
 
 func _ready() -> void:
-	_sprite = Sprite2D.new()
-	_sprite.scale = Vector2(0.56, 0.56)
-	_sprite.z_index = 35
-	add_child(_sprite)
+	_shadow = Sprite2D.new()
+	_shadow.texture = load("res://assets/art/sprites/projectiles/glow_soft.png")
+	_shadow.position = Vector2(0.0, 26.0)
+	_shadow.scale = Vector2(0.55, 0.22)
+	_shadow.modulate = Color(0.0, 0.0, 0.0, 0.55)
+	_shadow.z_index = 19
+	add_child(_shadow)
 
 	_dash_ring = Sprite2D.new()
 	_dash_ring.texture = load("res://assets/art/sprites/projectiles/glow_soft.png")
@@ -41,6 +53,14 @@ func _ready() -> void:
 	_dash_ring.modulate = Color(0.96, 0.25, 0.37, 0.25)
 	_dash_ring.z_index = 20
 	add_child(_dash_ring)
+
+	_visual_root = Node2D.new()
+	_visual_root.z_index = 35
+	add_child(_visual_root)
+
+	_sprite = Sprite2D.new()
+	_sprite.scale = Vector2(BASE_SPRITE_SCALE, BASE_SPRITE_SCALE)
+	_visual_root.add_child(_sprite)
 
 
 func setup(run: RunState, enemy_mgr: EnemyManager, vfx: VfxManager, weapon_rig: WeaponRig) -> void:
@@ -51,7 +71,7 @@ func setup(run: RunState, enemy_mgr: EnemyManager, vfx: VfxManager, weapon_rig: 
 	var hdef := GameData.get_hero(_run.hero_id)
 	_sprite.texture = load(String(hdef.get("sprite", "res://assets/art/sprites/heroes/hero_crimson_blade.png")))
 	_dash_ring.modulate = Color(hdef.get("color", Color(0.96, 0.25, 0.37)))
-	_dash_ring.modulate.a = 0.28
+	_dash_ring.modulate.a = 0.26
 	reset_for_wave()
 
 
@@ -63,11 +83,21 @@ func reset_for_wave() -> void:
 	_invuln_timer = 0.5
 	_regen_accum = 0.0
 	_toxic_accum = 0.0
+	_hurt_punch = 0.0
+	_visual_root.position = Vector2.ZERO
+	_visual_root.scale = Vector2.ONE
+	_visual_root.rotation = 0.0
 	_emit_hud_signals()
 
 
 func set_touch_move_vector(vec: Vector2) -> void:
 	_input_dir = vec
+
+
+func _get_dash_total_cd() -> float:
+	if _run == null:
+		return 2.4
+	return maxf(0.7, 2.4 * (1.0 - _run.stats.get_stat("dash_cd_pct") / 100.0))
 
 
 func trigger_dash() -> void:
@@ -81,56 +111,59 @@ func trigger_dash() -> void:
 	_ghost_timer = 0.0
 	_invuln_timer = maxf(_invuln_timer, 0.24)
 	EventBus.sfx_requested.emit("sfx_dash", 0.08)
+	_vfx.spawn_burst(global_position, Color(0.96, 0.25, 0.37), 56.0, 0.2)
 
-	# Pact: Blood Clone leaves explosive decoy at start pos
 	if _run.pacts.has("pact_blood_clone"):
 		var clone_dmg := 42.0 + _run.stats.get_stat("elemental_damage") * 1.4
 		_vfx.spawn_blood_clone(global_position, _sprite.texture, clone_dmg)
 
-	# Reset all melee weapon cooldowns!
 	if _weapon_rig != null:
 		_weapon_rig.reset_melee_cooldowns()
 
-	_emit_hud_signals()
+	_emit_dash_signal()
 
 
 func step(delta: float) -> void:
 	if _run == null:
 		return
 
-	# Combine touch + keyboard input
+	_anim_time += delta
 	var kb := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var move_vec := kb if kb.length_squared() > 0.02 else _input_dir
-	if move_vec.length_squared() > 0.02:
+	var is_moving := move_vec.length_squared() > 0.02
+	if is_moving:
 		_last_move_dir = move_vec.normalized()
 		_sprite.flip_h = _last_move_dir.x < -0.05
 
 	if Input.is_action_just_pressed("dash"):
 		trigger_dash()
 
-	# Dash recharge
+	# Dash recharge with precise countdown updates
 	if _dash_charges < _max_dash_charges:
-		var cd := 2.4 * (1.0 - _run.stats.get_stat("dash_cd_pct") / 100.0)
-		cd = maxf(0.7, cd)
+		var cd := _get_dash_total_cd()
 		_dash_recharge_timer += delta
 		if _dash_recharge_timer >= cd:
 			_dash_recharge_timer -= cd
 			_dash_charges += 1
-			_emit_hud_signals()
+			if _dash_charges >= _max_dash_charges:
+				_dash_recharge_timer = 0.0
+			_emit_dash_signal()
 		else:
-			EventBus.player_dash_changed.emit(_dash_charges, _max_dash_charges, _dash_recharge_timer / cd)
+			_emit_dash_signal()
 
 	# Movement & Dash execution
 	if _is_dashing:
 		_dash_timer -= delta
-		global_position += _dash_dir * 1420.0 * delta
+		global_position += _dash_dir * 1440.0 * delta
 		_ghost_timer -= delta
 		if _ghost_timer <= 0.0:
-			_ghost_timer = 0.032
+			_ghost_timer = 0.028
 			_vfx.spawn_dash_ghost(global_position, _sprite.texture, Color(0.98, 0.28, 0.42))
 		_apply_dash_passthrough()
 		if _dash_timer <= 0.0:
 			_is_dashing = false
+			_hurt_punch = 0.25 # Quick rebound squash on arrival
+			_vfx.spawn_burst(global_position, Color(0.98, 0.35, 0.48), 44.0, 0.16)
 	else:
 		var spd := _run.stats.get_stat("move_speed")
 		global_position += move_vec * spd * delta
@@ -138,10 +171,12 @@ func step(delta: float) -> void:
 	global_position.x = clampf(global_position.x, -575.0, 575.0)
 	global_position.y = clampf(global_position.y, -675.0, 675.0)
 
+	_update_hero_animation(delta, move_vec, is_moving)
+
 	# Invulnerability blink
 	if _invuln_timer > 0.0:
 		_invuln_timer = maxf(0.0, _invuln_timer - delta)
-		_sprite.modulate.a = 0.45 if int(_invuln_timer * 20.0) % 2 == 0 else 1.0
+		_sprite.modulate.a = 0.48 if int(_invuln_timer * 20.0) % 2 == 0 else 1.0
 	else:
 		_sprite.modulate.a = 1.0
 
@@ -161,15 +196,48 @@ func step(delta: float) -> void:
 			EventBus.player_hp_changed.emit(_run.current_hp, _run.stats.get_stat("max_hp"))
 
 
+func _update_hero_animation(delta: float, move_vec: Vector2, is_moving: bool) -> void:
+	_hurt_punch = maxf(0.0, _hurt_punch - delta * 2.8)
+	_dash_ring.rotation += delta * 1.4
+
+	if _is_dashing:
+		_visual_root.scale = Vector2(1.26, 0.78)
+		_visual_root.rotation = _dash_dir.x * 0.22
+		_visual_root.position = Vector2(0.0, -4.0)
+		_shadow.scale = Vector2(0.42, 0.16)
+		return
+
+	if is_moving:
+		var hop := absf(sin(_anim_time * 13.5))
+		var tilt := sin(_anim_time * 13.5) * 0.09 + move_vec.x * 0.11
+		_visual_root.position = Vector2(0.0, -hop * 7.5)
+		_visual_root.rotation = lerpf(_visual_root.rotation, tilt, minf(1.0, delta * 18.0))
+		var sy := 1.0 + hop * 0.09 - _hurt_punch * 0.18
+		var sx := 1.0 - hop * 0.06 + _hurt_punch * 0.22
+		_visual_root.scale = Vector2(sx, sy)
+		_shadow.scale = Vector2(0.55 - hop * 0.10, 0.22 - hop * 0.04)
+
+		_step_dust_timer -= delta
+		if _step_dust_timer <= 0.0:
+			_step_dust_timer = 0.22
+			_vfx.spawn_burst(global_position + Vector2(0.0, 22.0), Color(0.55, 0.45, 0.72), 16.0, 0.18)
+	else:
+		var breath := sin(_anim_time * 4.2)
+		_visual_root.position = Vector2(0.0, breath * 2.2)
+		_visual_root.rotation = lerpf(_visual_root.rotation, 0.0, minf(1.0, delta * 12.0))
+		_visual_root.scale = Vector2(1.0 - breath * 0.035 + _hurt_punch * 0.22, 1.0 + breath * 0.045 - _hurt_punch * 0.18)
+		_shadow.scale = Vector2(0.55, 0.22)
+
+
 func _apply_dash_passthrough() -> void:
 	if _enemy_mgr == null:
 		return
-	var hits := _enemy_mgr.query_radius(global_position, 72.0)
+	var hits := _enemy_mgr.query_radius(global_position, 74.0)
 	for e in hits:
 		var uid := int(e["uid"])
 		if _dash_hit_uids.has(uid):
 			continue
-		if global_position.distance_squared_to(Vector2(e["pos"])) <= pow(float(e["radius"]) + 36.0, 2):
+		if global_position.distance_squared_to(Vector2(e["pos"])) <= pow(float(e["radius"]) + 38.0, 2):
 			_dash_hit_uids[uid] = true
 			_enemy_mgr.apply_armor_break(e, 3.5)
 			EventBus.sfx_requested.emit("sfx_armor_break", 0.06)
@@ -211,6 +279,7 @@ func take_damage(raw_dmg: float) -> void:
 
 	var dmg := CombatFormulas.calc_player_damage_taken(raw_dmg, _run.stats)
 	_run.current_hp -= dmg
+	_hurt_punch = 0.65
 	var iframe_bonus := 1.0 + SaveManager.get_talent_value("tal_iframes") / 100.0
 	_invuln_timer = 0.55 * iframe_bonus
 	EventBus.sfx_requested.emit("sfx_player_hurt", 0.08)
@@ -236,10 +305,16 @@ func take_damage(raw_dmg: float) -> void:
 	EventBus.player_hp_changed.emit(_run.current_hp, _run.stats.get_stat("max_hp"))
 
 
+func _emit_dash_signal() -> void:
+	var cd := _get_dash_total_cd()
+	var left := 0.0 if _dash_charges >= _max_dash_charges else maxf(0.0, cd - _dash_recharge_timer)
+	EventBus.player_dash_changed.emit(_dash_charges, _max_dash_charges, left, cd)
+
+
 func _emit_hud_signals() -> void:
 	if _run == null:
 		return
 	EventBus.player_hp_changed.emit(_run.current_hp, _run.stats.get_stat("max_hp"))
 	EventBus.player_xp_changed.emit(_run.xp, _run.next_xp, _run.level)
-	EventBus.player_dash_changed.emit(_dash_charges, _max_dash_charges, 0.0)
+	_emit_dash_signal()
 	EventBus.crystals_changed.emit(_run.crystals)

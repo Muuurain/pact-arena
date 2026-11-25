@@ -1,7 +1,7 @@
 class_name BattleHud
 extends CanvasLayer
 ## Mobile-ergonomic combat HUD with Safe Area support, floating joystick,
-## Blood Dash thumb button, Boss bar, faction synergy pills, and pause menu.
+## crystal-clear Blood Dash cooldown seconds & charge pips, Boss bar, and pause menu.
 
 signal dash_pressed()
 signal pause_exit_requested()
@@ -23,9 +23,15 @@ var _hp_lbl: Label
 var _xp_bar: ProgressBar
 var _lv_lbl: Label
 var _synergy_box: HBoxContainer
+
 var _dash_btn: Button
-var _dash_lbl: Label
-var _dash_cd_bar: ProgressBar
+var _dash_sweep: ColorRect
+var _dash_icon: TextureRect
+var _dash_cd_big_lbl: Label
+var _dash_sub_lbl: Label
+var _dash_pips: Array[ColorRect] = []
+var _prev_charges: int = 2
+
 var _pause_panel: PanelContainer
 
 
@@ -44,25 +50,23 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(root)
 
-	# Danger Vignette
 	_vignette = ColorRect.new()
-	_vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var vmat := ShaderMaterial.new()
 	vmat.shader = load("res://assets/shaders/danger_vignette.gdshader")
 	_vignette.material = vmat
 	root.add_child(_vignette)
 
-	# Floating Virtual Joystick (under interactive buttons)
 	_joystick = TouchJoystick.new()
-	_joystick.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_joystick.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(_joystick)
 
 	var safe_box := Control.new()
-	safe_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	safe_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	safe_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	UiStyles.apply_safe_area_padding(safe_box, 14.0, 18.0)
 	root.add_child(safe_box)
@@ -72,8 +76,8 @@ func _build_ui() -> void:
 	top_panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	top_panel.offset_left = 14
 	top_panel.offset_right = -14
-	top_panel.offset_bottom = 92
-	top_panel.add_theme_stylebox_override("panel", UiStyles.make_panel_style(Color(0.08, 0.06, 0.14, 0.85), UiStyles.COL_BORDER, 14, 2))
+	top_panel.offset_bottom = 94
+	top_panel.add_theme_stylebox_override("panel", UiStyles.make_panel_style(Color(0.08, 0.06, 0.14, 0.86), UiStyles.COL_BORDER, 16, 2))
 	safe_box.add_child(top_panel)
 
 	var top_hbox := HBoxContainer.new()
@@ -82,28 +86,41 @@ func _build_ui() -> void:
 
 	var left_col := VBoxContainer.new()
 	left_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_col.alignment = BoxContainer.ALIGNMENT_CENTER
 	top_hbox.add_child(left_col)
 
+	var crys_row := HBoxContainer.new()
+	crys_row.add_theme_constant_override("separation", 6)
+	left_col.add_child(crys_row)
+
+	var crys_ic := TextureRect.new()
+	crys_ic.texture = load("res://assets/art/sprites/pickups/pickup_crystal.png")
+	crys_ic.custom_minimum_size = Vector2(26, 26)
+	crys_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	crys_ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	crys_row.add_child(crys_ic)
+
 	_crystals_lbl = Label.new()
-	_crystals_lbl.text = "血晶: 20"
-	_crystals_lbl.add_theme_font_size_override("font_size", 21)
+	_crystals_lbl.text = "20"
+	_crystals_lbl.add_theme_font_size_override("font_size", 22)
 	_crystals_lbl.add_theme_color_override("font_color", UiStyles.COL_CRIMSON)
-	left_col.add_child(_crystals_lbl)
+	crys_row.add_child(_crystals_lbl)
 
 	_kills_lbl = Label.new()
 	_kills_lbl.text = "击杀: 0"
-	_kills_lbl.add_theme_font_size_override("font_size", 17)
+	_kills_lbl.add_theme_font_size_override("font_size", 16)
 	_kills_lbl.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
 	left_col.add_child(_kills_lbl)
 
 	var mid_col := VBoxContainer.new()
 	mid_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mid_col.alignment = BoxContainer.ALIGNMENT_CENTER
 	top_hbox.add_child(mid_col)
 
 	_wave_lbl = Label.new()
 	_wave_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_wave_lbl.text = "第 1 波"
-	_wave_lbl.add_theme_font_size_override("font_size", 20)
+	_wave_lbl.add_theme_font_size_override("font_size", 19)
 	mid_col.add_child(_wave_lbl)
 
 	_timer_lbl = Label.new()
@@ -115,48 +132,52 @@ func _build_ui() -> void:
 
 	var pause_btn := Button.new()
 	pause_btn.text = "暂停"
-	pause_btn.custom_minimum_size = Vector2(84, 52)
-	UiStyles.style_button(pause_btn, UiStyles.COL_BORDER, false, 52.0)
+	pause_btn.custom_minimum_size = Vector2(88, 56)
+	UiStyles.style_button(pause_btn, UiStyles.COL_BORDER, false, 56.0)
 	pause_btn.pressed.connect(_toggle_pause)
 	top_hbox.add_child(pause_btn)
 
-	# BOSS BAR (below top bar)
+	# BOSS BAR
 	_boss_box = VBoxContainer.new()
 	_boss_box.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_boss_box.offset_left = 36
 	_boss_box.offset_right = -36
-	_boss_box.offset_top = 102
-	_boss_box.offset_bottom = 148
+	_boss_box.offset_top = 104
+	_boss_box.offset_bottom = 154
 	_boss_box.visible = false
 	_boss_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	safe_box.add_child(_boss_box)
 
 	_boss_name_lbl = Label.new()
 	_boss_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_boss_name_lbl.add_theme_font_size_override("font_size", 20)
+	_boss_name_lbl.add_theme_font_size_override("font_size", 21)
 	_boss_name_lbl.add_theme_color_override("font_color", UiStyles.COL_CRIMSON)
+	_boss_name_lbl.add_theme_color_override("font_outline_color", Color.BLACK)
+	_boss_name_lbl.add_theme_constant_override("outline_size", 4)
 	_boss_box.add_child(_boss_name_lbl)
 
 	_boss_bar = ProgressBar.new()
-	_boss_bar.custom_minimum_size.y = 18
+	_boss_bar.custom_minimum_size.y = 20
 	_boss_bar.show_percentage = false
 	_style_progress(_boss_bar, UiStyles.COL_CRIMSON)
 	_boss_box.add_child(_boss_bar)
 
-	# BOTTOM STATUS + DASH BUTTON
+	# BOTTOM STATUS + BLOOD DASH SKILL PAD
 	var bot_hbox := HBoxContainer.new()
 	bot_hbox.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bot_hbox.offset_left = 16
-	bot_hbox.offset_right = -16
-	bot_hbox.offset_top = -152
+	bot_hbox.offset_left = 14
+	bot_hbox.offset_right = -14
+	bot_hbox.offset_top = -170
 	bot_hbox.offset_bottom = -8
 	bot_hbox.add_theme_constant_override("separation", 12)
+	bot_hbox.alignment = BoxContainer.ALIGNMENT_END
 	bot_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	safe_box.add_child(bot_hbox)
 
 	var bars_panel := PanelContainer.new()
 	bars_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bars_panel.add_theme_stylebox_override("panel", UiStyles.make_panel_style(Color(0.08, 0.06, 0.14, 0.85), UiStyles.COL_BORDER, 14, 2))
+	bars_panel.size_flags_vertical = Control.SIZE_SHRINK_END
+	bars_panel.add_theme_stylebox_override("panel", UiStyles.make_panel_style(Color(0.08, 0.06, 0.14, 0.88), UiStyles.COL_BORDER, 16, 2))
 	bot_hbox.add_child(bars_panel)
 
 	var bars_v := VBoxContainer.new()
@@ -167,18 +188,18 @@ func _build_ui() -> void:
 	bars_v.add_child(hp_row)
 	_hp_lbl = Label.new()
 	_hp_lbl.text = "HP 45 / 45"
-	_hp_lbl.add_theme_font_size_override("font_size", 18)
+	_hp_lbl.add_theme_font_size_override("font_size", 19)
 	hp_row.add_child(_hp_lbl)
 	_lv_lbl = Label.new()
 	_lv_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_lv_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_lv_lbl.text = "Lv.1"
-	_lv_lbl.add_theme_font_size_override("font_size", 18)
+	_lv_lbl.add_theme_font_size_override("font_size", 19)
 	_lv_lbl.add_theme_color_override("font_color", UiStyles.COL_AZURE)
 	hp_row.add_child(_lv_lbl)
 
 	_hp_bar = ProgressBar.new()
-	_hp_bar.custom_minimum_size.y = 20
+	_hp_bar.custom_minimum_size.y = 22
 	_hp_bar.show_percentage = false
 	_style_progress(_hp_bar, UiStyles.COL_CRIMSON)
 	bars_v.add_child(_hp_bar)
@@ -190,31 +211,87 @@ func _build_ui() -> void:
 	bars_v.add_child(_xp_bar)
 
 	_synergy_box = HBoxContainer.new()
-	_synergy_box.add_theme_constant_override("separation", 8)
+	_synergy_box.add_theme_constant_override("separation", 10)
 	bars_v.add_child(_synergy_box)
 
-	# Thumb Blood Dash Button
+	# ANDROID ERGONOMIC BLOOD DASH SKILL PAD WITH LIVE COOLDOWN SECONDS
 	var dash_wrap := VBoxContainer.new()
-	dash_wrap.custom_minimum_size = Vector2(126, 134)
+	dash_wrap.custom_minimum_size = Vector2(144, 156)
+	dash_wrap.add_theme_constant_override("separation", 6)
 	bot_hbox.add_child(dash_wrap)
 
 	_dash_btn = Button.new()
-	_dash_btn.custom_minimum_size = Vector2(126, 114)
-	_dash_btn.text = "血步\n2/2"
-	UiStyles.style_button(_dash_btn, UiStyles.COL_CRIMSON, true, 114.0)
-	_dash_btn.icon = load("res://assets/art/ui/icon_dash.png")
-	_dash_btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_dash_btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+	_dash_btn.custom_minimum_size = Vector2(144, 136)
+	_dash_btn.pivot_offset = Vector2(72, 68)
+	_dash_btn.text = ""
+	_dash_btn.clip_contents = true
+	UiStyles.style_button(_dash_btn, UiStyles.COL_CRIMSON, true, 136.0)
 	_dash_btn.pressed.connect(func(): dash_pressed.emit())
 	dash_wrap.add_child(_dash_btn)
 
-	_dash_cd_bar = ProgressBar.new()
-	_dash_cd_bar.custom_minimum_size.y = 10
-	_dash_cd_bar.show_percentage = false
-	_dash_cd_bar.max_value = 1.0
-	_dash_cd_bar.value = 1.0
-	_style_progress(_dash_cd_bar, UiStyles.COL_GOLD)
-	dash_wrap.add_child(_dash_cd_bar)
+	# Cooldown progress fill bar sweeping upward from bottom inside button
+	_dash_sweep = ColorRect.new()
+	_dash_sweep.color = Color(0.98, 0.72, 0.16, 0.28)
+	_dash_sweep.anchor_left = 0.0
+	_dash_sweep.anchor_right = 1.0
+	_dash_sweep.anchor_top = 0.0
+	_dash_sweep.anchor_bottom = 1.0
+	_dash_sweep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dash_btn.add_child(_dash_sweep)
+
+	var dash_inner := VBoxContainer.new()
+	dash_inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dash_inner.alignment = BoxContainer.ALIGNMENT_CENTER
+	dash_inner.add_theme_constant_override("separation", 2)
+	dash_inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dash_btn.add_child(dash_inner)
+
+	var icon_box := Control.new()
+	icon_box.custom_minimum_size = Vector2(68, 68)
+	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dash_inner.add_child(icon_box)
+
+	_dash_icon = TextureRect.new()
+	_dash_icon.texture = load("res://assets/art/ui/icon_dash.png")
+	_dash_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_dash_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_dash_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_dash_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_box.add_child(_dash_icon)
+
+	_dash_cd_big_lbl = Label.new()
+	_dash_cd_big_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_dash_cd_big_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_dash_cd_big_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_dash_cd_big_lbl.add_theme_font_size_override("font_size", 28)
+	_dash_cd_big_lbl.add_theme_color_override("font_color", Color.WHITE)
+	_dash_cd_big_lbl.add_theme_color_override("font_outline_color", Color.BLACK)
+	_dash_cd_big_lbl.add_theme_constant_override("outline_size", 6)
+	_dash_cd_big_lbl.visible = false
+	icon_box.add_child(_dash_cd_big_lbl)
+
+	_dash_sub_lbl = Label.new()
+	_dash_sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_dash_sub_lbl.text = "血步 · 2/2"
+	_dash_sub_lbl.add_theme_font_size_override("font_size", 17)
+	_dash_sub_lbl.add_theme_color_override("font_color", UiStyles.COL_GOLD)
+	_dash_sub_lbl.add_theme_color_override("font_outline_color", Color.BLACK)
+	_dash_sub_lbl.add_theme_constant_override("outline_size", 4)
+	dash_inner.add_child(_dash_sub_lbl)
+
+	# Discrete charge pips row beneath skill button
+	var pips_row := HBoxContainer.new()
+	pips_row.add_theme_constant_override("separation", 6)
+	dash_wrap.add_child(pips_row)
+	_dash_pips.clear()
+	for _p in range(2):
+		var pip := ColorRect.new()
+		pip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		pip.custom_minimum_size.y = 10
+		pip.color = UiStyles.COL_GOLD
+		pips_row.add_child(pip)
+		_dash_pips.append(pip)
 
 	_build_pause_modal(root)
 
@@ -266,6 +343,7 @@ func _build_pause_modal(root: Control) -> void:
 
 func bind_run(run: RunState, player: PlayerController) -> void:
 	_run = run
+	_prev_charges = 2
 	_boss_box.visible = false
 	if not _joystick.move_vector_changed.is_connected(player.set_touch_move_vector):
 		_joystick.move_vector_changed.connect(player.set_touch_move_vector)
@@ -326,14 +404,49 @@ func _on_xp_changed(xp: float, next_xp: float, lv: int) -> void:
 	_lv_lbl.text = "Lv.%d" % lv
 
 
-func _on_dash_changed(charges: int, max_c: int, ratio: float) -> void:
-	_dash_btn.text = "血步\n%d/%d" % [charges, max_c]
+func _on_dash_changed(charges: int, max_c: int, time_left: float, total_cd: float) -> void:
 	_dash_btn.disabled = (charges <= 0)
-	_dash_cd_bar.value = 1.0 if charges >= max_c else ratio
+	var progress := 1.0 if charges >= max_c else clampf(1.0 - (time_left / maxf(0.1, total_cd)), 0.0, 1.0)
+
+	# Sweep overlay rises smoothly from bottom (anchor_top = 1.0 -> 0.0)
+	_dash_sweep.anchor_top = 1.0 - progress
+	_dash_sweep.color = Color(0.98, 0.78, 0.22, 0.34) if charges > 0 else Color(0.96, 0.25, 0.37, 0.38)
+
+	if charges == 0:
+		_dash_icon.modulate = Color(0.55, 0.55, 0.62, 0.42)
+		_dash_cd_big_lbl.visible = true
+		_dash_cd_big_lbl.text = "%.1fs" % time_left
+		_dash_sub_lbl.text = "冷却中 0/%d" % max_c
+		_dash_sub_lbl.add_theme_color_override("font_color", Color(0.98, 0.65, 0.72))
+	elif charges < max_c:
+		_dash_icon.modulate = Color.WHITE
+		_dash_cd_big_lbl.visible = false
+		_dash_sub_lbl.text = "血步 %d/%d · %.1fs" % [charges, max_c, time_left]
+		_dash_sub_lbl.add_theme_color_override("font_color", UiStyles.COL_AZURE)
+	else:
+		_dash_icon.modulate = Color.WHITE
+		_dash_cd_big_lbl.visible = false
+		_dash_sub_lbl.text = "血步 · %d/%d 满" % [charges, max_c]
+		_dash_sub_lbl.add_theme_color_override("font_color", UiStyles.COL_GOLD)
+
+	for i in range(_dash_pips.size()):
+		if i < charges:
+			_dash_pips[i].color = UiStyles.COL_GOLD
+		elif i == charges:
+			_dash_pips[i].color = Color(0.22, 0.74, 0.97, 0.35 + progress * 0.65)
+		else:
+			_dash_pips[i].color = Color(0.22, 0.18, 0.30, 0.7)
+
+	# Charge-complete pop feedback
+	if charges > _prev_charges:
+		var tw := _dash_btn.create_tween()
+		tw.tween_property(_dash_btn, "scale", Vector2(1.14, 1.14), 0.10).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_dash_btn, "scale", Vector2.ONE, 0.12)
+	_prev_charges = charges
 
 
 func _on_crystals_changed(amount: int) -> void:
-	_crystals_lbl.text = "血晶: %d" % amount
+	_crystals_lbl.text = str(amount)
 
 
 func _on_wave_changed(wave: int, time_left: float, _total: float, kills: int) -> void:

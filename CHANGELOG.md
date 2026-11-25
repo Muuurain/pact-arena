@@ -5,6 +5,18 @@ All notable changes to **Pact Arena (血契竞技场)** will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-11-25
+
+### Changed & Improved
+- **Nano Banana 现代美术重制**：全面替换 6 位英雄、8 类敌怪、2 大机制 Boss、14 把武器、掉落物、地面瓷砖、血契法阵及全套 Android UI 图标与主界面 Key Art 背景。
+- **全新动画系统重构**：
+  - 主角新增待机呼吸、跑步动态倾斜弹跳、踏地微尘、血步拉伸残影与受击压缩反弹动画。
+  - 敌怪与 Boss 新增差异化步伐晃动、受击挤压拉伸、脚底投影与环绕法阵旋转脉冲。
+  - 武器新增悬浮呼吸、近战弧线大幅挥砍、长矛前冲突刺、枪械后坐力与枪口闪光、阶梯光环特效。
+  - 全部界面弹窗与导航页面新增平滑弹性弹出动效 (`animate_pop_in`)。
+- **Android 原生风格主界面布局重构**：全屏 Key Art 背景 + 上升余烬光球 + 居中动态英雄展示 + 顶部余烬/设置齿轮栏 + 底部「踏入竞技场」大主按钮与 3 枚大尺寸安卓图标导航瓷砖。
+- **血步冷却倒计时可视化升级**：实时显示精确到 `0.1s` 的剩余秒数（0 层时居中大倒计时，1/2 层时保留可用同时展示下一次充能倒计时），搭配按钮内自底向上扫光填充、双格充能进度条与充能就绪弹跳闪烁反馈。
+
 ## [1.0.0] - 2026-11-25
 
 ### Added

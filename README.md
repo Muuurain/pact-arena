@@ -27,9 +27,12 @@
 
 ## 核心特色
 
-- **单手竖屏 × 血步破防机制**
-  - 移动端全屏自适应浮动虚拟摇杆 + 右下角拇指**血步瞬移（2 层充能）**；桌面端支持 `WASD`/方向键 + `Space`/`Shift`。
+- **单手竖屏 × 血步破防机制（v2.0 冷却倒计时可视化）**
+  - 移动端全屏自适应浮动虚拟摇杆 + 右下角大尺寸拇指**血步瞬移技能盘（2 层充能）**；实时显示精确到 `0.1s` 的冷却倒计时秒数、底部扫光填充条与充能就绪弹跳反馈；桌面端支持 `WASD`/方向键 + `Space`/`Shift`。
   - 血步穿过敌人可挂上 **3.5 秒「破甲印记」（+35% 易伤）** 并**立即重置全部已装备近战武器冷却**，高风险穿怪带来高回报爆发。
+- **现代暗黑霓虹美术 & 多维动态动画（v2.0 重构）**
+  - 全套英雄、敌怪、Boss、14 把武器、掉落物、地面瓷砖及主界面 Key Art 均基于 **Nano Banana** 图像生成并配合无溢色抠图流水线制作。
+  - 主角/敌怪/Boss 具备待机呼吸、跑步动态倾斜弹跳、受击挤压拉伸、Boss 旋转法阵与脚底投影；近战武器支持弧线大幅挥砍、长矛突刺与枪械后坐力枪口闪光。
 - **6 位机制迥异的英雄**
   - **血刃游侠**、**苍蓝魔导**、**狂战屠夫**、**独臂修罗**、**契约守财奴**、**虚空织命者**（支持局内硬核挑战解锁，或消耗深渊余烬提前解禁）。
 - **14 把武器 × 4 阶品质 × 28 条觉醒路线**
@@ -99,11 +102,11 @@ powershell -ExecutionPolicy Bypass -File tools\verify_project.ps1
 powershell -ExecutionPolicy Bypass -File tools\verify_project.ps1 -ExportAndroid -ExportWindows
 ```
 
-### 3. 重新生成离线美术与音频资产（可选）
+### 3. 重新生成/处理离线美术与音频资产（可选）
 需要 Python 3.11+（`Pillow`、`numpy`）以及 `ffmpeg`：
 ```bash
-python tools/generate_art.py
-python tools/generate_audio.py
+python tools/process_nano_assets.py   # 处理 Nano Banana 生成图集并导出透明精灵
+python tools/generate_audio.py        # 重新合成 OGG 音效与循环 BGM
 ```
 
 ---

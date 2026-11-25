@@ -137,6 +137,7 @@ func open() -> void:
 		_selected_weapon = String(GameData.get_hero(_selected_hero).get("default_weapon", "wpn_chainsaw"))
 	refresh_ui()
 	visible = true
+	UiStyles.animate_pop_in(self)
 
 
 func refresh_ui() -> void:
@@ -160,7 +161,7 @@ func refresh_ui() -> void:
 
 		var icon := TextureRect.new()
 		icon.texture = load(String(h["sprite"]))
-		icon.custom_minimum_size = Vector2(72, 72)
+		icon.custom_minimum_size = Vector2(88, 88)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		if not unlocked:

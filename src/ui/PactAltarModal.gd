@@ -117,3 +117,4 @@ func open_for_run(run: RunState) -> void:
 		cv.add_child(sign_btn)
 
 	visible = true
+	UiStyles.animate_pop_in(self)

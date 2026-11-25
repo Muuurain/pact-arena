@@ -200,6 +200,7 @@ func open_for_run(run: RunState, generate_new_stock: bool = true) -> void:
 	SaveManager.save_resume_run(_run)
 	refresh_ui()
 	visible = true
+	UiStyles.animate_pop_in(self)
 
 
 func refresh_ui() -> void:
@@ -253,7 +254,7 @@ func refresh_ui() -> void:
 
 			var tex := TextureRect.new()
 			tex.texture = load(String(wdef["sprite"]))
-			tex.custom_minimum_size = Vector2(46, 46)
+			tex.custom_minimum_size = Vector2(58, 58)
 			tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -405,7 +406,7 @@ func _rebuild_offers() -> void:
 			cv.add_child(top_row)
 			var icon := TextureRect.new()
 			icon.texture = load(String(wdef["sprite"]))
-			icon.custom_minimum_size = Vector2(46, 46)
+			icon.custom_minimum_size = Vector2(62, 62)
 			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			top_row.add_child(icon)

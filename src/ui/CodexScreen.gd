@@ -71,6 +71,7 @@ func _build_ui() -> void:
 func open() -> void:
 	refresh_ui()
 	visible = true
+	UiStyles.animate_pop_in(self)
 
 
 func refresh_ui() -> void:
@@ -106,7 +107,7 @@ func refresh_ui() -> void:
 
 		var icon := TextureRect.new()
 		icon.texture = load(String(w["sprite"]))
-		icon.custom_minimum_size = Vector2(56, 56)
+		icon.custom_minimum_size = Vector2(72, 72)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		h.add_child(icon)

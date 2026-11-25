@@ -144,15 +144,15 @@ func spawn_dash_ghost(world_pos: Vector2, tex: Texture2D, tint: Color) -> void:
 	var sp := Sprite2D.new()
 	sp.texture = tex
 	sp.global_position = world_pos
-	sp.scale = Vector2(0.55, 0.55)
-	sp.modulate = Color(tint.r, tint.g, tint.b, 0.62 * _get_vfx_alpha())
+	sp.scale = Vector2(0.48, 0.44)
+	sp.modulate = Color(tint.r, tint.g, tint.b, 0.65 * _get_vfx_alpha())
 	sp.z_index = 25
 	add_child(sp)
 
 	var tw := create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(sp, "modulate:a", 0.0, 0.25)
-	tw.tween_property(sp, "scale", Vector2(0.42, 0.42), 0.25)
+	tw.tween_property(sp, "modulate:a", 0.0, 0.26)
+	tw.tween_property(sp, "scale", Vector2(0.36, 0.34), 0.26)
 	tw.chain().tween_callback(sp.queue_free)
 
 

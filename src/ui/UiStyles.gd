@@ -103,3 +103,54 @@ static func apply_safe_area_padding(ctrl: Control, base_top: float = 12.0, base_
 		bot_pad = maxf(base_bottom, bottom_cut * scale_y + 8.0)
 	ctrl.offset_top = top_pad
 	ctrl.offset_bottom = -bot_pad
+
+
+static func animate_pop_in(ctrl: Control) -> void:
+	ctrl.modulate.a = 0.0
+	ctrl.pivot_offset = ctrl.size * 0.5
+	ctrl.scale = Vector2(0.96, 0.96)
+	var tw := ctrl.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(ctrl, "modulate:a", 1.0, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ctrl, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+static func make_android_nav_tile(icon_path: String, title_txt: String, sub_txt: String, accent: Color, on_press: Callable) -> Button:
+	var btn := Button.new()
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.custom_minimum_size = Vector2(0, 118)
+	btn.text = ""
+	style_button(btn, accent, false, 118.0)
+
+	var vb := VBoxContainer.new()
+	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_theme_constant_override("separation", 4)
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(vb)
+
+	var ic := TextureRect.new()
+	ic.texture = load(icon_path)
+	ic.custom_minimum_size = Vector2(56, 56)
+	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(ic)
+
+	var tl := Label.new()
+	tl.text = title_txt
+	tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tl.add_theme_font_size_override("font_size", 18)
+	tl.add_theme_color_override("font_color", Color.WHITE)
+	vb.add_child(tl)
+
+	var sl := Label.new()
+	sl.text = sub_txt
+	sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sl.add_theme_font_size_override("font_size", 12)
+	sl.add_theme_color_override("font_color", accent.lightened(0.25))
+	vb.add_child(sl)
+
+	btn.pressed.connect(on_press)
+	return btn

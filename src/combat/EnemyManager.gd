@@ -27,6 +27,20 @@ func _ready() -> void:
 		root.visible = false
 		root.z_index = 28
 
+		var shadow := Sprite2D.new()
+		shadow.texture = load("res://assets/art/sprites/projectiles/glow_soft.png")
+		shadow.position = Vector2(0.0, 22.0)
+		shadow.scale = Vector2(0.45, 0.18)
+		shadow.modulate = Color(0.0, 0.0, 0.0, 0.52)
+		root.add_child(shadow)
+
+		var aura := Sprite2D.new()
+		aura.texture = load("res://assets/art/sprites/arena/altar_sigil.png")
+		aura.scale = Vector2(0.42, 0.42)
+		aura.modulate = Color(0.96, 0.25, 0.37, 0.55)
+		aura.visible = false
+		root.add_child(aura)
+
 		var sp := Sprite2D.new()
 		var mat := ShaderMaterial.new()
 		mat.shader = _flash_shader
@@ -35,14 +49,14 @@ func _ready() -> void:
 
 		var hp_bg := ColorRect.new()
 		hp_bg.size = Vector2(44, 5)
-		hp_bg.position = Vector2(-22, -36)
+		hp_bg.position = Vector2(-22, -46)
 		hp_bg.color = Color(0.08, 0.06, 0.12, 0.85)
 		hp_bg.visible = false
 		root.add_child(hp_bg)
 
 		var hp_fill := ColorRect.new()
 		hp_fill.size = Vector2(44, 5)
-		hp_fill.position = Vector2(-22, -36)
+		hp_fill.position = Vector2(-22, -46)
 		hp_fill.color = Color(0.96, 0.25, 0.37, 0.95)
 		hp_fill.visible = false
 		root.add_child(hp_fill)
@@ -52,6 +66,8 @@ func _ready() -> void:
 			"alive": false,
 			"uid": 0,
 			"node": root,
+			"shadow": shadow,
+			"aura": aura,
 			"sprite": sp,
 			"mat": mat,
 			"hp_bg": hp_bg,
@@ -139,6 +155,8 @@ func spawn_enemy(enemy_id: String, world_pos: Vector2, wave: int, is_mini: bool 
 	slot["chill_timer"] = 0.0
 	slot["curse_timer"] = 0.0
 	slot["flash_timer"] = 0.0
+	slot["hit_squash"] = 0.0
+	slot["anim_phase"] = randf() * TAU
 	slot["ai_timer"] = randf_range(0.4, 1.4)
 	slot["ai_state"] = 0
 	slot["dash_dir"] = Vector2.ZERO
@@ -151,14 +169,29 @@ func spawn_enemy(enemy_id: String, world_pos: Vector2, wave: int, is_mini: bool 
 
 	var sp: Sprite2D = slot["sprite"]
 	sp.texture = _get_tex(String(edef["sprite"]))
-	var visual_scale := 0.52
+	sp.position = Vector2.ZERO
+	sp.rotation = 0.0
+	var visual_scale := 0.42
 	if is_boss:
-		visual_scale = 0.56
+		visual_scale = 0.72
 	elif bool(slot["is_elite"]):
-		visual_scale = 0.56
+		visual_scale = 0.54
+	elif enemy_id == "brute" or enemy_id == "shielder":
+		visual_scale = 0.48
 	elif is_mini:
-		visual_scale = 0.36
+		visual_scale = 0.30
+	slot["base_scale"] = visual_scale
 	sp.scale = Vector2.ONE * visual_scale
+
+	var shadow: Sprite2D = slot["shadow"]
+	shadow.position = Vector2(0.0, 56.0 if is_boss else 24.0)
+	shadow.scale = Vector2(1.05, 0.38) if is_boss else Vector2(0.45, 0.18)
+
+	var aura: Sprite2D = slot["aura"]
+	aura.visible = is_boss or bool(slot["is_elite"])
+	aura.scale = Vector2(0.48, 0.48) if is_boss else Vector2(0.22, 0.22)
+	aura.modulate = Color(0.75, 0.35, 0.98, 0.55) if enemy_id == "boss_sovereign" else (Color(0.96, 0.25, 0.37, 0.55) if is_boss else Color(0.98, 0.80, 0.12, 0.48))
+
 	var mat: ShaderMaterial = slot["mat"]
 	mat.set_shader_parameter("flash_amount", 0.0)
 	mat.set_shader_parameter("armor_break_amount", 0.0)
@@ -241,7 +274,26 @@ func step(delta: float) -> void:
 		var root: Node2D = e["node"]
 		root.global_position = pos
 		var sp: Sprite2D = e["sprite"]
-		sp.flip_h = Vector2(e["facing"]).x > 0.05
+		sp.flip_h = Vector2(e["facing"]).x < -0.05
+
+		# Procedural gait / hover / hit-squash animation
+		e["anim_phase"] = float(e["anim_phase"]) + delta * (4.0 if bool(e["is_boss"]) else 9.5)
+		e["hit_squash"] = maxf(0.0, float(e["hit_squash"]) - delta * 7.5)
+		var bs := float(e.get("base_scale", 0.42))
+		var sq := float(e["hit_squash"])
+		var ph := float(e["anim_phase"])
+		if bool(e["is_boss"]):
+			var hover := sin(ph) * 6.0
+			sp.position = Vector2(0.0, hover)
+			sp.rotation = sin(ph * 0.5) * 0.04
+			(e["aura"] as Sprite2D).rotation += delta * 1.4
+		else:
+			var hop := absf(sin(ph))
+			sp.position = Vector2(0.0, -hop * 5.0)
+			sp.rotation = sin(ph) * 0.08
+			if (e["aura"] as Sprite2D).visible:
+				(e["aura"] as Sprite2D).rotation += delta * 1.8
+		sp.scale = Vector2(bs * (1.0 + sq * 0.24), bs * (1.0 - sq * 0.20))
 
 		# Contact damage with player
 		var hit_r := float(e["radius"]) + 18.0
@@ -482,6 +534,7 @@ func apply_hit_to_enemy(
 
 	e["hp"] = float(e["hp"]) - final_dmg
 	e["flash_timer"] = 0.11
+	e["hit_squash"] = 1.0
 
 	var kb_resist := 0.20 if bool(e["is_boss"]) else (0.45 if bool(e["is_elite"]) or String(e["id"]) == "brute" else 1.0)
 	e["vel"] = Vector2(e["vel"]) + knockback_vec * kb_resist

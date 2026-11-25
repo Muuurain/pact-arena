@@ -59,13 +59,13 @@ func spawn_pickup(world_pos: Vector2, kind: String, crystal_val: int = 1, xp_val
 	match kind:
 		"heal":
 			sp.texture = _tex_heal
-			sp.scale = Vector2(0.45, 0.45)
+			sp.scale = Vector2(0.38, 0.38)
 		"chest":
 			sp.texture = _tex_chest
-			sp.scale = Vector2(0.55, 0.55)
+			sp.scale = Vector2(0.48, 0.48)
 		_:
 			sp.texture = _tex_crystal
-			sp.scale = Vector2(0.44, 0.44)
+			sp.scale = Vector2(0.38, 0.38)
 	sp.visible = true
 
 
@@ -89,7 +89,9 @@ func has_active_pickups() -> bool:
 
 func step(delta: float, player_pos: Vector2, pickup_radius: float, player: PlayerController, run: RunState) -> void:
 	var rad_sq := pickup_radius * pickup_radius
-	for d in _active:
+	var t_sec := float(Time.get_ticks_msec()) * 0.005
+	for i in range(_active.size()):
+		var d: Dictionary = _active[i]
 		if not bool(d["alive"]):
 			continue
 		var pos := Vector2(d["pos"])
@@ -107,7 +109,7 @@ func step(delta: float, player_pos: Vector2, pickup_radius: float, player: Playe
 		d["pos"] = pos
 		d["vel"] = vel
 		var sp: Sprite2D = d["sprite"]
-		sp.global_position = pos
+		sp.global_position = pos + Vector2(0.0, sin(t_sec + float(i)) * 3.2)
 
 		if pos.distance_squared_to(player_pos) <= 32.0 * 32.0:
 			_collect(d, player, run)

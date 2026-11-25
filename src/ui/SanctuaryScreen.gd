@@ -83,6 +83,7 @@ func _build_ui() -> void:
 func open() -> void:
 	refresh_ui()
 	visible = true
+	UiStyles.animate_pop_in(self)
 
 
 func refresh_ui() -> void:

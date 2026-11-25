@@ -157,9 +157,17 @@ func _test_full_ui_and_combat_integration() -> void:
 
 	inst.arena.player.trigger_dash()
 	inst.arena.player.heal_or_convert(10.0) # Triggers Toxic Blood blast!
+	var dash_probe := {"seen": false, "last": 999.0}
+	var sig_cb := func(ch: int, _mc: int, t_left: float, tot: float):
+		if ch < 2 and t_left > 0.0 and tot > 0.5 and t_left < float(dash_probe["last"]):
+			dash_probe["seen"] = true
+		dash_probe["last"] = t_left
+	EventBus.player_dash_changed.connect(sig_cb)
 	for _f in range(60):
 		await get_tree().process_frame
+	EventBus.player_dash_changed.disconnect(sig_cb)
 
+	_assert(bool(dash_probe["seen"]), "Blood Dash emits continuous decreasing cooldown seconds")
 	_assert(inst.arena.enemy_mgr.has_active_boss(), "Wave 5 Boss spawned and active in Arena")
 	_assert(inst.arena.enemy_mgr.get_alive_count() >= 1, "Wave Director spawned enemies")
 

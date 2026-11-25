@@ -29,6 +29,8 @@ func rebuild_weapons() -> void:
 	for sn in _slot_nodes:
 		if is_instance_valid(sn["sprite"]):
 			(sn["sprite"] as Node).queue_free()
+		if sn.has("aura") and is_instance_valid(sn["aura"]):
+			(sn["aura"] as Node).queue_free()
 	_slot_nodes.clear()
 	clear_turrets()
 
@@ -36,23 +38,37 @@ func rebuild_weapons() -> void:
 		return
 
 	var count := _run.weapons.size()
+	var glow_tex: Texture2D = load("res://assets/art/sprites/projectiles/glow_soft.png")
 	for i in range(count):
 		var w_entry: Dictionary = _run.weapons[i]
 		var wdef := GameData.get_weapon(String(w_entry["id"]))
+		var tier := int(w_entry.get("tier", 1))
+		var sc := 0.34 + float(tier - 1) * 0.025
+		if _run.hero_id == "hero_one_arm_asura":
+			sc *= 1.38
+
+		var aura := Sprite2D.new()
+		aura.texture = glow_tex
+		aura.scale = Vector2.ONE * (sc * 1.4)
+		aura.modulate = UiStyles.tier_color(tier)
+		aura.modulate.a = 0.0 if tier == 1 else (0.28 + float(tier - 2) * 0.14)
+		aura.z_index = 36
+		add_child(aura)
+
 		var sp := Sprite2D.new()
 		sp.texture = load(String(wdef.get("sprite", "")))
-		var tier := int(w_entry.get("tier", 1))
-		var sc := 0.36 + float(tier - 1) * 0.03
-		if _run.hero_id == "hero_one_arm_asura":
-			sc *= 1.45
 		sp.scale = Vector2.ONE * sc
 		sp.z_index = 38
 		add_child(sp)
 		_slot_nodes.append({
 			"idx": i,
 			"sprite": sp,
+			"aura": aura,
+			"base_scale": sc,
 			"cooldown": randf_range(0.05, 0.25),
 			"recoil": 0.0,
+			"swing_anim": 0.0,
+			"swing_sign": 1.0,
 			"aim_angle": 0.0,
 			"turret_deployed": false,
 		})
@@ -97,9 +113,11 @@ func step(delta: float) -> void:
 		var wdef := GameData.get_weapon(wid)
 
 		var base_ang := _orbit_angle + float(i) * (TAU / float(count))
-		var anchor := _player.global_position + Vector2.from_angle(base_ang) * 46.0
+		var bob := Vector2(0.0, sin(_orbit_angle * 2.5 + float(i) * 1.1) * 3.5)
+		var anchor := _player.global_position + Vector2.from_angle(base_ang) * 52.0 + bob
 
-		sn["recoil"] = maxf(0.0, float(sn["recoil"]) - delta * 5.0)
+		sn["recoil"] = maxf(0.0, float(sn["recoil"]) - delta * 6.0)
+		sn["swing_anim"] = maxf(0.0, float(sn["swing_anim"]) - delta * 6.5)
 		sn["cooldown"] = float(sn["cooldown"]) - delta
 
 		var eff_range := maxf(80.0, float(wdef["base_range"]) + _run.stats.get_stat("range_bonus"))
@@ -110,15 +128,28 @@ func step(delta: float) -> void:
 
 		var nearest := _enemy_mgr.find_nearest_pos(anchor, eff_range)
 		var sp: Sprite2D = sn["sprite"]
+		var aura: Sprite2D = sn["aura"]
 		if nearest.has("found"):
 			var target_dir := (Vector2(nearest["pos"]) - anchor).normalized()
-			sn["aim_angle"] = lerp_angle(float(sn["aim_angle"]), target_dir.angle(), minf(1.0, delta * 16.0))
+			sn["aim_angle"] = lerp_angle(float(sn["aim_angle"]), target_dir.angle(), minf(1.0, delta * 18.0))
 		else:
 			sn["aim_angle"] = lerp_angle(float(sn["aim_angle"]), base_ang, minf(1.0, delta * 8.0))
 
-		var recoil_offset := Vector2.from_angle(float(sn["aim_angle"])) * (float(sn["recoil"]) * 26.0)
-		sp.global_position = anchor + recoil_offset
-		sp.rotation = float(sn["aim_angle"])
+		var is_melee := String(wdef["weapon_class"]) == "melee"
+		var swing := float(sn["swing_anim"])
+		var swing_offset := sin((1.0 - swing) * PI) * 1.25 * float(sn["swing_sign"]) if (is_melee and swing > 0.0) else 0.0
+		var lunge := (float(sn["recoil"]) * 34.0) if is_melee else (-float(sn["recoil"]) * 14.0)
+		var final_ang := float(sn["aim_angle"]) + swing_offset
+		var pos := anchor + Vector2.from_angle(float(sn["aim_angle"])) * lunge
+		var bs := float(sn.get("base_scale", 0.34))
+		var punch := 1.0 + swing * 0.28
+
+		sp.global_position = pos
+		sp.rotation = final_ang
+		sp.flip_v = absf(wrapf(final_ang, -PI, PI)) > PI * 0.5
+		sp.scale = Vector2.ONE * (bs * punch)
+		aura.global_position = pos
+		aura.rotation += delta * 2.2
 
 		# Turret deployment once per wave per totem
 		if String(wdef["pattern"]) == "turret_deploy" and not bool(sn["turret_deployed"]):
@@ -136,6 +167,11 @@ func step(delta: float) -> void:
 
 			sn["cooldown"] = CombatFormulas.calc_weapon_cooldown(wdef, tier, _run.stats, bonus_as)
 			sn["recoil"] = 1.0
+			if is_melee and String(wdef["pattern"]) != "thrust":
+				sn["swing_anim"] = 1.0
+				sn["swing_sign"] = -float(sn["swing_sign"])
+			else:
+				_vfx.spawn_burst(anchor + Vector2.from_angle(float(sn["aim_angle"])) * 26.0, UiStyles.faction_color(String(wdef["faction"])), 24.0, 0.11)
 			_fire_weapon(sn, w_entry, wdef, anchor, nearest, dmg_pct_add, extra_pierce, eff_range)
 
 	_step_turrets(delta, dmg_pct_add, extra_pierce, flags)
