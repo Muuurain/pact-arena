@@ -39,7 +39,7 @@ const STAT_LABELS: Dictionary = {
 	"dodge_pct": "闪避率%",
 	"move_speed": "移动速度",
 	"range_bonus": "攻击范围",
-	"pickup_radius": "拾取半径",
+	"pickup_radius": "拾取范围",
 	"luck": "幸运",
 	"harvesting": "收获加成",
 	"dash_cd_pct": "血步冷却%",

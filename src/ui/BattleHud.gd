@@ -32,6 +32,7 @@ var _dash_sub_lbl: Label
 var _dash_pips: Array[ColorRect] = []
 var _prev_charges: int = 2
 
+var _pause_modal: Control
 var _pause_panel: PanelContainer
 var _pause_synergy_lbl: Label
 
@@ -96,7 +97,7 @@ func _build_ui() -> void:
 
 	var crys_ic := TextureRect.new()
 	crys_ic.texture = load("res://assets/art/sprites/pickups/pickup_crystal.png")
-	crys_ic.custom_minimum_size = Vector2(26, 26)
+	crys_ic.custom_minimum_size = Vector2(34, 34)
 	crys_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	crys_ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	crys_row.add_child(crys_ic)
@@ -133,8 +134,8 @@ func _build_ui() -> void:
 
 	var pause_btn := Button.new()
 	pause_btn.text = "暂停"
-	pause_btn.custom_minimum_size = Vector2(88, 56)
-	UiStyles.style_button(pause_btn, UiStyles.COL_BORDER, false, 56.0)
+	pause_btn.custom_minimum_size = Vector2(102, 58)
+	UiStyles.style_button(pause_btn, UiStyles.COL_BORDER, false, 58.0)
 	pause_btn.pressed.connect(_toggle_pause)
 	top_hbox.add_child(pause_btn)
 
@@ -299,51 +300,68 @@ func _build_ui() -> void:
 
 
 func _build_pause_modal(root: Control) -> void:
+	_pause_modal = Control.new()
+	_pause_modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_pause_modal.visible = false
+	_pause_modal.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_pause_modal.z_index = 90
+	root.add_child(_pause_modal)
+
+	var dim := ColorRect.new()
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.02, 0.01, 0.05, 0.78)
+	_pause_modal.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_pause_modal.add_child(center)
+
 	_pause_panel = PanelContainer.new()
-	_pause_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_pause_panel.offset_left = -240
-	_pause_panel.offset_right = 240
-	_pause_panel.offset_top = -230
-	_pause_panel.offset_bottom = 230
-	_pause_panel.visible = false
-	_pause_panel.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
-	_pause_panel.add_theme_stylebox_override("panel", UiStyles.make_panel_style(Color(0.09, 0.07, 0.16, 0.98), UiStyles.COL_CRIMSON, 18, 3))
-	root.add_child(_pause_panel)
+	_pause_panel.custom_minimum_size = Vector2(580, 0)
+	_pause_panel.add_theme_stylebox_override("panel", UiStyles.make_panel_style(Color(0.09, 0.07, 0.17, 0.98), UiStyles.COL_CRIMSON, 20, 3))
+	center.add_child(_pause_panel)
 
 	var pv := VBoxContainer.new()
-	pv.add_theme_constant_override("separation", 12)
+	pv.add_theme_constant_override("separation", 14)
 	_pause_panel.add_child(pv)
 
 	var title := Label.new()
-	title.text = "战斗已暂停"
+	title.text = "战斗暂停"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_font_size_override("font_size", 30)
 	pv.add_child(title)
 
+	var syn_scroll := TouchScrollContainer.new()
+	syn_scroll.custom_minimum_size = Vector2(0, 150)
+	pv.add_child(syn_scroll)
+
 	_pause_synergy_lbl = Label.new()
+	_pause_synergy_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_pause_synergy_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_pause_synergy_lbl.add_theme_font_size_override("font_size", 14)
+	_pause_synergy_lbl.add_theme_font_size_override("font_size", 17)
 	_pause_synergy_lbl.add_theme_color_override("font_color", UiStyles.COL_AZURE)
-	pv.add_child(_pause_synergy_lbl)
+	syn_scroll.add_child(_pause_synergy_lbl)
 
 	var resume_btn := Button.new()
 	resume_btn.text = "继续战斗"
-	UiStyles.style_button(resume_btn, UiStyles.COL_EMERALD, true, 54.0)
+	UiStyles.style_button(resume_btn, UiStyles.COL_EMERALD, true, 58.0)
 	resume_btn.pressed.connect(_toggle_pause)
 	pv.add_child(resume_btn)
 
 	var shake_chk := CheckButton.new()
-	shake_chk.text = "屏幕震动反馈"
+	shake_chk.text = "受击震屏"
+	shake_chk.custom_minimum_size.y = 52
+	shake_chk.add_theme_font_size_override("font_size", 18)
 	shake_chk.button_pressed = bool(SaveManager.get_setting("screen_shake", true))
 	shake_chk.toggled.connect(func(v: bool): SaveManager.set_setting("screen_shake", v))
 	pv.add_child(shake_chk)
 
 	var exit_btn := Button.new()
-	exit_btn.text = "返回主菜单 (不保存本波进度)"
-	UiStyles.style_button(exit_btn, UiStyles.COL_CRIMSON, false, 52.0)
+	exit_btn.text = "返回主菜单（放弃本波进度）"
+	UiStyles.style_button(exit_btn, UiStyles.COL_CRIMSON, false, 56.0)
 	exit_btn.pressed.connect(func():
 		get_tree().paused = false
-		_pause_panel.visible = false
+		_pause_modal.visible = false
 		pause_exit_requested.emit()
 	)
 	pv.add_child(exit_btn)
@@ -362,6 +380,7 @@ func bind_run(run: RunState, player: PlayerController) -> void:
 
 func _refresh_synergy_pills() -> void:
 	for c in _synergy_box.get_children():
+		_synergy_box.remove_child(c)
 		c.queue_free()
 	if _run == null:
 		return
@@ -371,17 +390,38 @@ func _refresh_synergy_pills() -> void:
 		if n <= 0:
 			continue
 		var stars := "★★★" if n >= 6 else ("★★" if n >= 4 else ("★" if n >= 2 else "/2"))
+		var pill := PanelContainer.new()
+		var fcol := UiStyles.faction_color(f) if n >= 2 else UiStyles.COL_TEXT_DIM
+		var st := UiStyles.make_panel_style(Color(0.10, 0.08, 0.18, 0.85), fcol, 8, 1)
+		st.shadow_size = 0
+		st.content_margin_left = 7
+		st.content_margin_right = 7
+		st.content_margin_top = 2
+		st.content_margin_bottom = 2
+		pill.add_theme_stylebox_override("panel", st)
+		pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var lbl := Label.new()
-		lbl.text = "%s %d%s" % [UiStyles.faction_name(f), n, stars]
+		lbl.text = "%s%d%s" % [UiStyles.faction_name(f), n, stars]
 		lbl.add_theme_font_size_override("font_size", 14)
-		lbl.add_theme_color_override("font_color", UiStyles.faction_color(f) if n >= 2 else UiStyles.COL_TEXT_DIM)
-		_synergy_box.add_child(lbl)
+		lbl.add_theme_color_override("font_color", fcol)
+		pill.add_child(lbl)
+		_synergy_box.add_child(pill)
 	for r in SynergyEngine.get_active_resonances(_run.synergy_info.get("flags", {})):
+		var rpill := PanelContainer.new()
+		var rst := UiStyles.make_panel_style(Color(0.18, 0.13, 0.06, 0.90), UiStyles.COL_GOLD, 8, 1)
+		rst.shadow_size = 0
+		rst.content_margin_left = 7
+		rst.content_margin_right = 7
+		rst.content_margin_top = 2
+		rst.content_margin_bottom = 2
+		rpill.add_theme_stylebox_override("panel", rst)
+		rpill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var rlbl := Label.new()
 		rlbl.text = "⚡" + String(r["name"])
 		rlbl.add_theme_font_size_override("font_size", 14)
 		rlbl.add_theme_color_override("font_color", UiStyles.COL_GOLD)
-		_synergy_box.add_child(rlbl)
+		rpill.add_child(rlbl)
+		_synergy_box.add_child(rpill)
 
 
 func _style_progress(bar: ProgressBar, col: Color) -> void:
@@ -404,7 +444,7 @@ func _toggle_pause() -> void:
 			_pause_synergy_lbl.text = "当前生效羁绊：暂未激活（凑齐同系 2/4/6 把或双系 2+2 激活共鸣）"
 		else:
 			_pause_synergy_lbl.text = "当前生效羁绊：\n" + "\n".join(effects)
-	_pause_panel.visible = p
+	_pause_modal.visible = p
 	EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
 
 

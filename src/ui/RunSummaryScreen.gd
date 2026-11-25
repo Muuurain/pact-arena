@@ -85,29 +85,31 @@ func _build_ui() -> void:
 func show_wave10_choice(run: RunState) -> void:
 	_title_lbl.text = "深渊主宰已陨落！"
 	_title_lbl.add_theme_color_override("font_color", UiStyles.COL_GOLD)
-	_sub_lbl.text = "你已成功通关第 10 波！你可以现在荣耀撤离，或潜入无尽深渊继续冲榜。"
+	_sub_lbl.text = "成功打通第 10 波！现在可以携余烬凯旋，或潜入无尽深渊继续冲击极限。"
 	_body_lbl.text = _format_stats_summary(run, run.calc_ember_reward(), [])
 	_endless_btn.visible = true
-	_done_btn.text = "荣耀撤离并结算 (+%d 余烬)" % run.calc_ember_reward()
+	_done_btn.text = "见好就收（结算 +%d 余烬）" % run.calc_ember_reward()
 	EventBus.sfx_requested.emit("sfx_victory", 0.0)
 	visible = true
+	UiStyles.animate_pop_in(self)
 
 
 func show_final_summary(run: RunState, commit_report: Dictionary) -> void:
 	var earned := int(commit_report.get("embers_earned", 0))
 	var unlocked: Array = commit_report.get("newly_unlocked", [])
 	if run.victory_reached:
-		_title_lbl.text = "深渊凯旋结算"
+		_title_lbl.text = "深渊凯旋"
 		_title_lbl.add_theme_color_override("font_color", UiStyles.COL_GOLD)
 	else:
-		_title_lbl.text = "征程终结"
+		_title_lbl.text = "饮恨深渊"
 		_title_lbl.add_theme_color_override("font_color", UiStyles.COL_CRIMSON)
 
-	_sub_lbl.text = "获得永久局外货币：【+%d 深渊余烬】" % earned
+	_sub_lbl.text = "本局收获：【+%d 深渊余烬】" % earned
 	_body_lbl.text = _format_stats_summary(run, earned, unlocked)
 	_endless_btn.visible = false
 	_done_btn.text = "返回主菜单"
 	visible = true
+	UiStyles.animate_pop_in(self)
 
 
 func _format_stats_summary(run: RunState, embers: int, unlocked: Array) -> String:

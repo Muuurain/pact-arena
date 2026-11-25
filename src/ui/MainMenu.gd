@@ -11,6 +11,7 @@ signal open_codex_requested()
 var _embers_lbl: Label
 var _record_lbl: Label
 var _resume_btn: Button
+var _settings_modal: Control
 var _settings_panel: PanelContainer
 var _hero_showcase: TextureRect
 var _ember_particles: CPUParticles2D
@@ -96,7 +97,7 @@ func _build_ui() -> void:
 
 	var ember_ic := TextureRect.new()
 	ember_ic.texture = load("res://assets/art/ui/icon_ember.png")
-	ember_ic.custom_minimum_size = Vector2(40, 40)
+	ember_ic.custom_minimum_size = Vector2(48, 48)
 	ember_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	ember_ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	wh.add_child(ember_ic)
@@ -118,23 +119,23 @@ func _build_ui() -> void:
 
 	# Android Top-Right Square Settings Icon Button
 	var cfg_btn := Button.new()
-	cfg_btn.custom_minimum_size = Vector2(64, 64)
+	cfg_btn.custom_minimum_size = Vector2(72, 72)
 	cfg_btn.text = ""
-	UiStyles.style_button(cfg_btn, UiStyles.COL_AZURE, false, 64.0)
+	UiStyles.style_button(cfg_btn, UiStyles.COL_AZURE, false, 72.0)
 	var cfg_ic := TextureRect.new()
 	cfg_ic.texture = load("res://assets/art/ui/icon_settings.png")
 	cfg_ic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cfg_ic.offset_left = 10
-	cfg_ic.offset_top = 10
-	cfg_ic.offset_right = -10
-	cfg_ic.offset_bottom = -10
+	cfg_ic.offset_left = 8
+	cfg_ic.offset_top = 8
+	cfg_ic.offset_right = -8
+	cfg_ic.offset_bottom = -8
 	cfg_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	cfg_ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	cfg_ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cfg_btn.add_child(cfg_ic)
 	cfg_btn.pressed.connect(func():
 		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
-		_settings_panel.visible = true
+		_settings_modal.visible = true
 		UiStyles.animate_pop_in(_settings_panel)
 	)
 	top_h.add_child(cfg_btn)
@@ -211,7 +212,7 @@ func _build_ui() -> void:
 
 	var play_ic := TextureRect.new()
 	play_ic.texture = load("res://assets/art/ui/icon_dash.png")
-	play_ic.custom_minimum_size = Vector2(52, 52)
+	play_ic.custom_minimum_size = Vector2(58, 58)
 	play_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	play_ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	play_ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -229,7 +230,7 @@ func _build_ui() -> void:
 	play_tv.add_child(pt)
 
 	var ps := Label.new()
-	ps.text = "选择英雄 · 热度协议 · 开启第 1 波"
+	ps.text = "选定英雄与难度 · 开启第 1 波"
 	ps.add_theme_font_size_override("font_size", 14)
 	ps.add_theme_color_override("font_color", Color(1.0, 0.85, 0.88))
 	play_tv.add_child(ps)
@@ -277,24 +278,44 @@ func _build_ui() -> void:
 
 
 func _build_settings_modal() -> void:
+	_settings_modal = Control.new()
+	_settings_modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_settings_modal.visible = false
+	_settings_modal.z_index = 90
+	add_child(_settings_modal)
+
+	var dim := Button.new()
+	dim.flat = true
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var dim_sb := StyleBoxFlat.new()
+	dim_sb.bg_color = Color(0.02, 0.01, 0.05, 0.78)
+	dim.add_theme_stylebox_override("normal", dim_sb)
+	dim.add_theme_stylebox_override("hover", dim_sb)
+	dim.add_theme_stylebox_override("pressed", dim_sb)
+	dim.pressed.connect(func():
+		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
+		_settings_modal.visible = false
+	)
+	_settings_modal.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_settings_modal.add_child(center)
+
 	_settings_panel = PanelContainer.new()
-	_settings_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_settings_panel.offset_left = -270
-	_settings_panel.offset_right = 270
-	_settings_panel.offset_top = -240
-	_settings_panel.offset_bottom = 240
-	_settings_panel.visible = false
-	_settings_panel.add_theme_stylebox_override("panel", UiStyles.make_panel_style(Color(0.09, 0.07, 0.16, 0.98), UiStyles.COL_AZURE, 18, 3))
-	add_child(_settings_panel)
+	_settings_panel.custom_minimum_size = Vector2(580, 0)
+	_settings_panel.add_theme_stylebox_override("panel", UiStyles.make_panel_style(Color(0.10, 0.07, 0.18, 0.98), UiStyles.COL_AZURE, 20, 3))
+	center.add_child(_settings_panel)
 
 	var sv := VBoxContainer.new()
-	sv.add_theme_constant_override("separation", 14)
+	sv.add_theme_constant_override("separation", 16)
 	_settings_panel.add_child(sv)
 
 	var t := Label.new()
 	t.text = "系统设置"
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_font_size_override("font_size", 26)
+	t.add_theme_font_size_override("font_size", 28)
 	sv.add_child(t)
 
 	_add_slider_row(sv, "背景音乐音量", "bgm_volume", 0.72, func(v: float):
@@ -309,17 +330,19 @@ func _build_settings_modal() -> void:
 	)
 
 	var shake_btn := CheckButton.new()
-	shake_btn.text = "屏幕震动反馈"
+	shake_btn.text = "受击震屏"
+	shake_btn.custom_minimum_size.y = 52
+	shake_btn.add_theme_font_size_override("font_size", 19)
 	shake_btn.button_pressed = bool(SaveManager.get_setting("screen_shake", true))
 	shake_btn.toggled.connect(func(v: bool): SaveManager.set_setting("screen_shake", v))
 	sv.add_child(shake_btn)
 
 	var close_btn := Button.new()
-	close_btn.text = "关闭"
-	UiStyles.style_button(close_btn, UiStyles.COL_CRIMSON, true, 54.0)
+	close_btn.text = "完成"
+	UiStyles.style_button(close_btn, UiStyles.COL_CRIMSON, true, 58.0)
 	close_btn.pressed.connect(func():
 		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
-		_settings_panel.visible = false
+		_settings_modal.visible = false
 	)
 	sv.add_child(close_btn)
 
@@ -327,10 +350,11 @@ func _build_settings_modal() -> void:
 func _add_slider_row(parent: VBoxContainer, label_txt: String, key: String, def_v: float, on_change: Callable) -> void:
 	var lbl := Label.new()
 	lbl.text = label_txt
-	lbl.add_theme_font_size_override("font_size", 17)
+	lbl.add_theme_font_size_override("font_size", 19)
 	parent.add_child(lbl)
 
 	var sl := HSlider.new()
+	sl.custom_minimum_size.y = 38
 	sl.min_value = 0.0
 	sl.max_value = 1.0
 	sl.step = 0.05

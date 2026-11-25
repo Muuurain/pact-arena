@@ -37,8 +37,8 @@ func _build_ui() -> void:
 
 	var back_btn := Button.new()
 	back_btn.text = "返回"
-	back_btn.custom_minimum_size = Vector2(90, 48)
-	UiStyles.style_button(back_btn, UiStyles.COL_BORDER, false, 48.0)
+	back_btn.custom_minimum_size = Vector2(98, 52)
+	UiStyles.style_button(back_btn, UiStyles.COL_BORDER, false, 52.0)
 	back_btn.pressed.connect(func():
 		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
 		visible = false
@@ -68,8 +68,8 @@ func _build_ui() -> void:
 	scroll.add_child(_list_box)
 
 	var respec_btn := Button.new()
-	respec_btn.text = "一键免费洗点 (返还 100% 深渊余烬)"
-	UiStyles.style_button(respec_btn, UiStyles.COL_AZURE, false, 54.0)
+	respec_btn.text = "免费洗点（100% 返还已投余烬）"
+	UiStyles.style_button(respec_btn, UiStyles.COL_AZURE, false, 56.0)
 	respec_btn.pressed.connect(func():
 		var ref := SaveManager.respec_all_talents()
 		EventBus.sfx_requested.emit("sfx_reroll", 0.0)
@@ -136,14 +136,14 @@ func refresh_ui() -> void:
 			tv.add_child(dl)
 
 			var up_btn := Button.new()
-			up_btn.custom_minimum_size = Vector2(114, 54)
+			up_btn.custom_minimum_size = Vector2(122, 56)
 			if next_cost < 0:
 				up_btn.text = "已满级"
 				up_btn.disabled = true
 			else:
-				up_btn.text = "升级 $%d" % next_cost
+				up_btn.text = "强化 $%d" % next_cost
 				up_btn.disabled = SaveManager.get_embers() < next_cost
-			UiStyles.style_button(up_btn, b_col, next_cost >= 0, 54.0)
+			UiStyles.style_button(up_btn, b_col, next_cost >= 0, 56.0)
 			up_btn.pressed.connect(func():
 				if SaveManager.upgrade_talent(tid):
 					EventBus.sfx_requested.emit("sfx_buy_merge", 0.0)

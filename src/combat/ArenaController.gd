@@ -69,11 +69,11 @@ func start_wave() -> void:
 	# Boss Wave 5 & Wave 10+
 	if _run.wave == 5 or _run.wave == 10 or (_run.wave > 10 and _run.wave % 5 == 0):
 		var boss_id := "boss_inquisitor" if _run.wave == 5 else "boss_sovereign"
-		enemy_mgr.spawn_enemy(boss_id, Vector2(0.0, -280.0), _run.wave)
+		enemy_mgr.queue_spawn_enemy(boss_id, Vector2(0.0, -300.0), _run.wave, 0.95)
 		if _run.danger_level >= 4:
-			enemy_mgr.spawn_enemy("elite_warden", Vector2(-240.0, -220.0), _run.wave)
+			enemy_mgr.queue_spawn_enemy("elite_warden", Vector2(-240.0, -240.0), _run.wave, 0.85)
 			if _run.danger_level >= 5:
-				enemy_mgr.spawn_enemy("elite_warden", Vector2(240.0, -220.0), _run.wave)
+				enemy_mgr.queue_spawn_enemy("elite_warden", Vector2(240.0, -240.0), _run.wave, 0.85)
 		EventBus.sfx_requested.emit("sfx_boss_warn", 0.0)
 		EventBus.bgm_requested.emit("bgm_boss")
 	else:
@@ -137,7 +137,7 @@ func _step_wave_director(delta: float) -> void:
 	var interval := maxf(0.26, 1.28 / density)
 	_spawn_timer = interval
 
-	if enemy_mgr.get_alive_count() >= 165:
+	if (enemy_mgr.get_alive_count() + enemy_mgr.get_pending_count()) >= 165:
 		return
 
 	var pool := GameData.get_wave_pool(_run.wave)
@@ -148,7 +148,7 @@ func _step_wave_director(delta: float) -> void:
 	for _i in range(pack):
 		var eid: String = pool[randi() % pool.size()]
 		var pos := _pick_spawn_pos()
-		enemy_mgr.spawn_enemy(eid, pos, _run.wave)
+		enemy_mgr.queue_spawn_enemy(eid, pos, _run.wave)
 
 	# Elite spawns scale earlier and higher on steeper Danger tiers
 	var min_elite_wave := 2 if _run.danger_level >= 2 else 3
@@ -159,19 +159,20 @@ func _step_wave_director(delta: float) -> void:
 		max_elites += 1
 	if _elite_spawned_count < max_elites and _wave_time_left < _wave_total_time * 0.72:
 		_elite_spawned_count += 1
-		enemy_mgr.spawn_enemy("elite_warden", _pick_spawn_pos(), _run.wave)
+		enemy_mgr.queue_spawn_enemy("elite_warden", _pick_spawn_pos(), _run.wave)
 
 
 func _pick_spawn_pos() -> Vector2:
-	# Spawn along a visible perimeter ring around the player so enemies enter the camera view cleanly
-	for _try in range(6):
+	# Spawn via visible perimeter summon rifts well clear of the player's collision box
+	for _try in range(8):
 		var ang := randf() * TAU
-		var dist := randf_range(265.0, 480.0)
+		var dist := randf_range(310.0, 505.0)
 		var p := player.global_position + Vector2.from_angle(ang) * dist
 		if absf(p.x) <= 545.0 and absf(p.y) <= 645.0:
 			return p
-	var fallback := Vector2(-420.0 if player.global_position.x > 0 else 420.0, clampf(player.global_position.y + randf_range(-280.0, 280.0), -620.0, 620.0))
-	return fallback
+	var away_x := -420.0 if player.global_position.x >= 0.0 else 420.0
+	var away_y := -420.0 if player.global_position.y >= 0.0 else 420.0
+	return Vector2(away_x, clampf(player.global_position.y * 0.35 + away_y * 0.5, -620.0, 620.0))
 
 
 func _begin_wave_clear() -> void:

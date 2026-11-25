@@ -7,6 +7,8 @@ signal back_requested()
 
 var _ban_info_lbl: Label
 var _list_box: VBoxContainer
+var _synergy_modal: Control
+var _synergy_panel: PanelContainer
 
 
 func _ready() -> void:
@@ -37,8 +39,8 @@ func _build_ui() -> void:
 
 	var back_btn := Button.new()
 	back_btn.text = "返回"
-	back_btn.custom_minimum_size = Vector2(90, 48)
-	UiStyles.style_button(back_btn, UiStyles.COL_BORDER, false, 48.0)
+	back_btn.custom_minimum_size = Vector2(98, 52)
+	UiStyles.style_button(back_btn, UiStyles.COL_BORDER, false, 52.0)
 	back_btn.pressed.connect(func():
 		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
 		visible = false
@@ -49,7 +51,7 @@ func _build_ui() -> void:
 	var title := Label.new()
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.text = "武器图鉴 & 禁用"
+	title.text = "深渊图鉴"
 	title.add_theme_font_size_override("font_size", 26)
 	top_h.add_child(title)
 
@@ -67,8 +69,40 @@ func _build_ui() -> void:
 	_list_box.add_theme_constant_override("separation", 10)
 	scroll.add_child(_list_box)
 
+	var sm := UiStyles.make_centered_modal_shell(self, 640.0, UiStyles.COL_VOID, 95)
+	_synergy_modal = sm["overlay"]
+	_synergy_panel = sm["panel"]
+	var syn_v: VBoxContainer = sm["body"]
+
+	var syn_title := Label.new()
+	syn_title.text = "神系羁绊与双神共鸣"
+	syn_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	syn_title.add_theme_font_size_override("font_size", 24)
+	syn_title.add_theme_color_override("font_color", UiStyles.COL_VOID)
+	syn_v.add_child(syn_title)
+
+	var syn_scroll := TouchScrollContainer.new()
+	syn_scroll.custom_minimum_size = Vector2(0, 520)
+	syn_v.add_child(syn_scroll)
+
+	var syn_box := VBoxContainer.new()
+	syn_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	syn_box.add_theme_constant_override("separation", 10)
+	syn_scroll.add_child(syn_box)
+	UiStyles.populate_synergy_details(syn_box, {}, false)
+
+	var syn_close := Button.new()
+	syn_close.text = "关闭"
+	UiStyles.style_button(syn_close, UiStyles.COL_VOID, true, 54.0)
+	syn_close.pressed.connect(func():
+		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
+		_synergy_modal.visible = false
+	)
+	syn_v.add_child(syn_close)
+
 
 func open() -> void:
+	_synergy_modal.visible = false
 	refresh_ui()
 	visible = true
 	UiStyles.animate_pop_in(self)
@@ -77,19 +111,25 @@ func open() -> void:
 func refresh_ui() -> void:
 	var max_bans := SaveManager.get_max_ban_slots()
 	var bans := SaveManager.get_ban_list()
-	_ban_info_lbl.text = "禁用槽: %d/%d" % [bans.size(), max_bans]
+	_ban_info_lbl.text = "禁选: %d/%d" % [bans.size(), max_bans]
 
 	for c in _list_box.get_children():
+		_list_box.remove_child(c)
 		c.queue_free()
 
-	var syn_box := VBoxContainer.new()
-	syn_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	syn_box.add_theme_constant_override("separation", 8)
-	_list_box.add_child(syn_box)
-	UiStyles.populate_synergy_details(syn_box, {}, false)
+	var syn_btn := Button.new()
+	syn_btn.text = "查看神系羁绊与双神共鸣总览 ›"
+	UiStyles.style_button(syn_btn, UiStyles.COL_VOID, false, 54.0)
+	_list_box.add_child(syn_btn)
+
+	syn_btn.pressed.connect(func():
+		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
+		_synergy_modal.visible = true
+		UiStyles.animate_pop_in(_synergy_panel)
+	)
 
 	var wh := Label.new()
-	wh.text = "【14把武装精通与四阶双路线觉醒】(Lv.2 可作为任意英雄开局武器)"
+	wh.text = "武装图鉴（14 把 · 精通 Lv.2 起全职业可带 · 点击看详情）"
 	wh.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wh.add_theme_font_size_override("font_size", 16)
 	wh.add_theme_color_override("font_color", UiStyles.COL_AZURE)
@@ -104,47 +144,83 @@ func refresh_ui() -> void:
 		var is_banned := bans.has(wid)
 
 		var card := PanelContainer.new()
-		card.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, Color(0.45, 0.25, 0.25) if is_banned else fcol, 12, 2))
+		card.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, Color(0.45, 0.25, 0.25) if is_banned else fcol, 14, 2))
 		_list_box.add_child(card)
 
 		var h := HBoxContainer.new()
 		h.add_theme_constant_override("separation", 10)
 		card.add_child(h)
 
+		var inspect_btn := Button.new()
+		inspect_btn.flat = true
+		inspect_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		inspect_btn.custom_minimum_size.y = 84
+		h.add_child(inspect_btn)
+
+		var row := HBoxContainer.new()
+		row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		row.add_theme_constant_override("separation", 12)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inspect_btn.add_child(row)
+
 		var icon := TextureRect.new()
 		icon.texture = load(String(w["sprite"]))
-		icon.custom_minimum_size = Vector2(72, 72)
+		icon.custom_minimum_size = Vector2(80, 80)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		h.add_child(icon)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(icon)
 
 		var tv := VBoxContainer.new()
 		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		h.add_child(tv)
+		tv.alignment = BoxContainer.ALIGNMENT_CENTER
+		tv.add_theme_constant_override("separation", 4)
+		tv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(tv)
 
 		var nl := Label.new()
-		nl.text = "%s [%s] · 精通 Lv.%d (%d/%d杀)" % [String(w["name"]), UiStyles.faction_name(String(w["faction"])), lv, kills, next_req]
-		nl.add_theme_font_size_override("font_size", 17)
+		nl.text = "%s · %s系" % [String(w["name"]), UiStyles.faction_name(String(w["faction"]))]
+		nl.add_theme_font_size_override("font_size", 19)
 		nl.add_theme_color_override("font_color", fcol)
 		tv.add_child(nl)
 
-		var awks: Array = w.get("awakenings", [])
-		var awk_txt := ""
-		if awks.size() >= 2:
-			awk_txt = "觉醒A:%s | 觉醒B:%s" % [String(awks[0]["name"]), String(awks[1]["name"])]
-		var dl := Label.new()
-		dl.text = String(w["desc"]) + "\n" + awk_txt
-		dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		dl.add_theme_font_size_override("font_size", 13)
-		dl.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
-		tv.add_child(dl)
+		var sub_l := Label.new()
+		sub_l.text = "精通 Lv.%d (%d/%d 杀) · 点按看参数与觉醒 ›" % [lv, kills, next_req]
+		sub_l.add_theme_font_size_override("font_size", 14)
+		sub_l.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
+		tv.add_child(sub_l)
+
+		var w_copy := (w as Dictionary).duplicate(true)
+		inspect_btn.pressed.connect(func():
+			EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
+			var awks: Array = w_copy.get("awakenings", [])
+			var awk_lines := ""
+			if awks.size() >= 2:
+				awk_lines = "\n\n【四阶红武双觉醒分支】\n• %s：%s\n• %s：%s" % [
+					String(awks[0]["name"]), String(awks[0]["desc"]),
+					String(awks[1]["name"]), String(awks[1]["desc"]),
+				]
+			var body := "武器特点：%s\n\n基础伤害：%.0f   |   冷却：%.2fs\n攻击距离：%.0f   |   暴击加成：+%.0f%%\n精通进度：Lv.%d（%d / %d 击杀，Lv.2 解锁全英雄携带）%s" % [
+				String(w_copy["desc"]),
+				float(w_copy["base_damage"]), float(w_copy["base_cooldown"]),
+				float(w_copy["base_range"]), float(w_copy["crit_bonus"]),
+				lv, kills, next_req, awk_lines
+			]
+			UiStyles.show_detail_modal(self, {
+				"title": String(w_copy["name"]),
+				"subtitle": "%s神系 · %s武器" % [UiStyles.faction_name(String(w_copy["faction"])), "近战" if String(w_copy["weapon_class"]) == "melee" else ("召唤" if String(w_copy["weapon_class"]) == "summon" else "远程/法术")],
+				"body": body,
+				"accent": fcol,
+				"icon_path": String(w_copy["sprite"]),
+			})
+		)
 
 		if max_bans > 0:
 			var bbtn := Button.new()
-			bbtn.text = "已禁用" if is_banned else "禁用"
-			bbtn.custom_minimum_size = Vector2(78, 46)
+			bbtn.text = "已屏蔽" if is_banned else "屏蔽"
+			bbtn.custom_minimum_size = Vector2(84, 52)
 			bbtn.disabled = (not is_banned and bans.size() >= max_bans)
-			UiStyles.style_button(bbtn, UiStyles.COL_CRIMSON if is_banned else UiStyles.COL_BORDER, is_banned, 46.0)
+			UiStyles.style_button(bbtn, UiStyles.COL_CRIMSON if is_banned else UiStyles.COL_BORDER, is_banned, 52.0)
 			bbtn.pressed.connect(func():
 				SaveManager.toggle_ban_entry(wid)
 				EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
@@ -153,7 +229,7 @@ func refresh_ui() -> void:
 			h.add_child(bbtn)
 
 	var ih := Label.new()
-	ih.text = "【18种商店道具图鉴】"
+	ih.text = "道具图鉴（18 种 · 点击查看详细属性）"
 	ih.add_theme_font_size_override("font_size", 16)
 	ih.add_theme_color_override("font_color", UiStyles.COL_GOLD)
 	_list_box.add_child(ih)
@@ -163,42 +239,70 @@ func refresh_ui() -> void:
 		var is_banned := bans.has(iid)
 		var itcol := UiStyles.tier_color(int(it["tier"]))
 		var card := PanelContainer.new()
-		card.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, Color(0.45, 0.25, 0.25) if is_banned else itcol, 12, 1))
+		card.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, Color(0.45, 0.25, 0.25) if is_banned else itcol, 14, 1))
 		_list_box.add_child(card)
 		var h := HBoxContainer.new()
 		h.add_theme_constant_override("separation", 10)
 		card.add_child(h)
 
+		var inspect_btn := Button.new()
+		inspect_btn.flat = true
+		inspect_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		inspect_btn.custom_minimum_size.y = 76
+		h.add_child(inspect_btn)
+
+		var row := HBoxContainer.new()
+		row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		row.add_theme_constant_override("separation", 12)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inspect_btn.add_child(row)
+
 		var icon := TextureRect.new()
 		icon.texture = load(String(it.get("sprite", "")))
-		icon.custom_minimum_size = Vector2(58, 58)
+		icon.custom_minimum_size = Vector2(72, 72)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		h.add_child(icon)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(icon)
 
 		var tv := VBoxContainer.new()
 		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		h.add_child(tv)
+		tv.alignment = BoxContainer.ALIGNMENT_CENTER
+		tv.add_theme_constant_override("separation", 4)
+		tv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(tv)
 
 		var nl := Label.new()
-		nl.text = "%s [%s阶]" % [String(it["name"]), UiStyles.tier_name(int(it["tier"]))]
-		nl.add_theme_font_size_override("font_size", 16)
+		nl.text = "%s · %s" % [String(it["name"]), UiStyles.tier_name(int(it["tier"]))]
+		nl.add_theme_font_size_override("font_size", 18)
 		nl.add_theme_color_override("font_color", itcol)
 		tv.add_child(nl)
 
-		var l := Label.new()
-		l.text = String(it["desc"])
-		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		l.add_theme_font_size_override("font_size", 13)
-		l.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
-		tv.add_child(l)
+		var hint_l := Label.new()
+		hint_l.text = String(it["desc"])
+		hint_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hint_l.add_theme_font_size_override("font_size", 14)
+		hint_l.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
+		tv.add_child(hint_l)
+
+		var it_copy := (it as Dictionary).duplicate(true)
+		inspect_btn.pressed.connect(func():
+			EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
+			UiStyles.show_detail_modal(self, {
+				"title": String(it_copy["name"]),
+				"subtitle": "%s品质 · 基础售价 %d 血晶" % [UiStyles.tier_name(int(it_copy["tier"])), int(it_copy["price"])],
+				"body": "效果明细：\n%s\n\n%s" % [String(it_copy["desc"]), "当前已在商店货架屏蔽（不再刷出）" if is_banned else "可在商店与战利宝箱中获取（可叠加）"],
+				"accent": itcol,
+				"icon_path": String(it_copy.get("sprite", "")),
+			})
+		)
 
 		if max_bans > 0:
 			var bbtn := Button.new()
-			bbtn.text = "已禁用" if is_banned else "禁用"
-			bbtn.custom_minimum_size = Vector2(74, 40)
+			bbtn.text = "已屏蔽" if is_banned else "屏蔽"
+			bbtn.custom_minimum_size = Vector2(84, 50)
 			bbtn.disabled = (not is_banned and bans.size() >= max_bans)
-			UiStyles.style_button(bbtn, UiStyles.COL_CRIMSON if is_banned else UiStyles.COL_BORDER, is_banned, 40.0)
+			UiStyles.style_button(bbtn, UiStyles.COL_CRIMSON if is_banned else UiStyles.COL_BORDER, is_banned, 50.0)
 			bbtn.pressed.connect(func():
 				SaveManager.toggle_ban_entry(iid)
 				EventBus.sfx_requested.emit("sfx_ui_click", 0.0)

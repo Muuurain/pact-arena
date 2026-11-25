@@ -178,5 +178,5 @@ static func format_shop_summary(synergy_info: Dictionary) -> String:
 
 	var active := format_active_effects(synergy_info)
 	if active.is_empty():
-		return header + "\n提示：凑齐同系 2/4/6 把武器激活神系增益，双系 2+2 解锁融合共鸣（点击右上【羁绊】查看全效果）"
+		return header + "\n收集 2/4/6 把同系武器激活神系加护，或双系各 2 把触发共鸣（点右上【羁绊】查看）"
 	return header + "\n生效：" + "；".join(active)

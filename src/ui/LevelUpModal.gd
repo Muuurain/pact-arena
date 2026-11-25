@@ -107,14 +107,14 @@ func _show_chest() -> void:
 	info_v.add_child(n)
 
 	var d := Label.new()
-	d.text = String(it["desc"]) + "\n额外获得 +%d 血晶！" % bonus_crystals
+	d.text = String(it["desc"]) + "\n随箱附带 +%d 血晶" % bonus_crystals
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	d.add_theme_font_size_override("font_size", 18)
 	info_v.add_child(d)
 
 	var btn := Button.new()
-	btn.text = "收入囊中"
-	UiStyles.style_button(btn, UiStyles.COL_GOLD, true, 54.0)
+	btn.text = "收下"
+	UiStyles.style_button(btn, UiStyles.COL_GOLD, true, 56.0)
 	btn.pressed.connect(func():
 		_run.pending_chests = maxi(0, _run.pending_chests - 1)
 		_run.items.append(String(it["id"]))
@@ -125,14 +125,15 @@ func _show_chest() -> void:
 	)
 	cv.add_child(btn)
 	visible = true
+	UiStyles.animate_pop_in(self)
 
 
 func _show_levelup() -> void:
 	for c in _cards_box.get_children():
 		c.queue_free()
-	_title_lbl.text = "等级提升强化！(Lv.%d)" % _run.level
+	_title_lbl.text = "等级提升！(Lv.%d)" % _run.level
 	_title_lbl.add_theme_color_override("font_color", UiStyles.COL_AZURE)
-	_sub_lbl.text = "剩余强化选择：%d 次" % _run.pending_level_ups
+	_sub_lbl.text = "还能挑 %d 项属性强化" % _run.pending_level_ups
 
 	var choices := ShopGenerator.generate_levelup_choices(_run.stats.get_stat("luck"))
 	for ch in choices:

@@ -267,7 +267,10 @@ func _test_full_ui_and_combat_integration() -> void:
 
 	# Exercise MainMenu -> HeroSelect -> Sanctuary -> Codex
 	inst._hero_select.open()
-	_assert(inst._hero_select.visible and inst._hero_select._danger_box.get_child_count() == 6, "HeroSelectScreen opens cleanly with D0..D5 selector")
+	_assert(inst._hero_select.visible and inst._hero_select._danger_box.get_child_count() == 6 and inst._hero_select._heat_list_box.get_child_count() == 8, "HeroSelectScreen opens cleanly with D0..D5 selector & 8 Heat cards")
+	inst._hero_select._heat_toggle_btn.pressed.emit()
+	_assert(inst._hero_select._heat_modal.visible, "HeroSelect Heat modal opens centered overlay cleanly")
+	inst._hero_select._heat_modal.visible = false
 	inst._hero_select.visible = false
 
 	inst._sanctuary.open()
@@ -276,7 +279,15 @@ func _test_full_ui_and_combat_integration() -> void:
 
 	inst._codex.open()
 	_assert(inst._codex.visible and inst._codex._list_box.get_child_count() >= 34, "CodexScreen opens cleanly with synergy & weapon/item entries")
+	_assert(inst._codex._synergy_modal != null, "CodexScreen initializes centered synergy modal")
+	UiStyles.show_detail_modal(inst._codex, {"title": "裂血链锯", "subtitle": "猩红神系", "body": "测试详情浮层", "icon_path": "res://assets/art/sprites/weapons/wpn_chainsaw.png"})
+	_assert(inst._codex.get_node_or_null("_DetailModalOverlay") != null, "Tap-to-inspect detail modal mounts cleanly")
+	var dm := inst._codex.get_node_or_null("_DetailModalOverlay")
+	if dm != null:
+		dm.queue_free()
 	inst._codex.visible = false
+
+	_assert(inst._menu._settings_modal != null and inst.hud._pause_modal != null, "MainMenu settings & BattleHud pause use centered modal overlays")
 
 	# Test Wave 5 Boss combat + Toxic Blood pact + 6 diverse weapons firing
 	inst._start_fresh_run("hero_crimson_blade", "wpn_chainsaw", ["heat_speed"])
@@ -304,15 +315,19 @@ func _test_full_ui_and_combat_integration() -> void:
 	EventBus.player_dash_changed.disconnect(sig_cb)
 
 	_assert(bool(dash_probe["seen"]), "Blood Dash emits continuous decreasing cooldown seconds")
-	_assert(inst.arena.enemy_mgr.has_active_boss(), "Wave 5 Boss spawned and active in Arena")
-	_assert(inst.arena.enemy_mgr.get_alive_count() >= 1, "Wave Director spawned enemies")
+	_assert(inst.arena.enemy_mgr.has_active_boss(), "Wave 5 Boss queued/active in Arena")
+	for _s in range(14):
+		inst.arena._process(0.1)
+	_assert(inst.arena.enemy_mgr.get_alive_count() >= 1, "Wave Director spawned and materialized enemies after telegraph")
 
 	# Test Wave 10 Boss + LevelUp + PactAltar + Shop + Awakening + Summary UI
 	run.wave = 10
 	inst.arena.start_wave()
-	for _f in range(15):
-		await get_tree().process_frame
-	_assert(inst.arena.enemy_mgr.has_active_boss(), "Wave 10 Boss (Twin Sovereign) spawned")
+	var pending_before := inst.arena.enemy_mgr.get_pending_count()
+	_assert(inst.arena.enemy_mgr.has_active_boss() and pending_before >= 1, "Wave 10 Boss enters via summon telegraph instead of instant pop-in")
+	for _s in range(12):
+		inst.arena._process(0.1)
+	_assert(inst.arena.enemy_mgr.has_active_boss() and inst.arena.enemy_mgr.get_alive_count() >= 1, "Queued Boss & mobs materialize smoothly after telegraph window")
 
 	run.pending_level_ups = 1
 	run.pending_chests = 1
@@ -367,7 +382,8 @@ func _test_full_ui_and_combat_integration() -> void:
 
 	SaveManager.clear_resume_run()
 	inst.queue_free()
-	await get_tree().process_frame
+	for _w in range(3):
+		await get_tree().process_frame
 
 
 func _test_difficulty_and_economy_rebalance() -> void:
@@ -405,3 +421,16 @@ func _test_difficulty_and_economy_rebalance() -> void:
 	sink_run.danger_level = 5
 	var ember_d5 := sink_run.calc_ember_reward()
 	_assert(ember_d5 > ember_d0, "Higher Danger tiers award significantly more Abyss Embers")
+
+	# Verify pending spawn telegraph and materialize flow
+	var em := EnemyManager.new()
+	get_tree().root.add_child(em)
+	await get_tree().process_frame
+	em.queue_spawn_enemy("swarmer", Vector2(360, 0), 1, 0.35)
+	_assert(em.get_pending_count() == 1 and em.get_alive_count() == 0, "Queued enemy waits in summon telegraph before spawning")
+	em.step(0.20)
+	_assert(em.get_pending_count() == 1 and em.get_alive_count() == 0, "Queued enemy remains non-collidable during partial telegraph")
+	em.step(0.20)
+	_assert(em.get_pending_count() == 0 and em.get_alive_count() == 1, "Queued enemy materializes cleanly once telegraph finishes")
+	em.queue_free()
+	await get_tree().process_frame

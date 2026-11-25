@@ -11,6 +11,9 @@ var _grid: Dictionary = {}
 var _uid_counter: int = 1
 var _tex_cache: Dictionary = {}
 var _flash_shader: Shader
+var _ring_shader: Shader
+var _sigil_tex: Texture2D
+var _pending_spawns: Array[Dictionary] = []
 
 var _run: RunState
 var _player: PlayerController
@@ -22,6 +25,8 @@ var _active_boss: Dictionary = {}
 
 func _ready() -> void:
 	_flash_shader = load("res://assets/shaders/hit_flash.gdshader")
+	_ring_shader = load("res://assets/shaders/telegraph_ring.gdshader")
+	_sigil_tex = load("res://assets/art/sprites/arena/altar_sigil.png")
 	for i in range(MAX_ENEMIES):
 		var root := Node2D.new()
 		root.visible = false
@@ -89,7 +94,61 @@ func _get_tex(path: String) -> Texture2D:
 	return _tex_cache[path]
 
 
-func spawn_enemy(enemy_id: String, world_pos: Vector2, wave: int, is_mini: bool = false) -> Dictionary:
+func queue_spawn_enemy(enemy_id: String, world_pos: Vector2, wave: int, delay_sec: float = -1.0) -> void:
+	var edef := GameData.get_enemy(enemy_id)
+	if edef.is_empty():
+		return
+	var is_boss := enemy_id.begins_with("boss_")
+	var is_elite := (enemy_id == "elite_warden")
+	var dur := delay_sec
+	if dur < 0.0:
+		dur = 0.95 if is_boss else (0.85 if is_elite else 0.65)
+
+	var clamped := Vector2(clampf(world_pos.x, -555.0, 555.0), clampf(world_pos.y, -650.0, 650.0))
+	var ring_r := 76.0 if is_boss else (46.0 if is_elite else maxf(28.0, float(edef.get("radius", 20.0)) * 1.42))
+	var fill_col := Color(0.96, 0.16, 0.38, 0.34) if is_boss else (Color(0.98, 0.72, 0.14, 0.28) if is_elite else Color(0.86, 0.20, 0.44, 0.22))
+	var rim_col := Color(1.0, 0.45, 0.58, 0.96) if is_boss else (Color(1.0, 0.86, 0.32, 0.94) if is_elite else Color(0.98, 0.46, 0.64, 0.90))
+
+	var marker := Node2D.new()
+	marker.global_position = clamped
+	marker.z_index = 12
+
+	var rect := ColorRect.new()
+	rect.size = Vector2(ring_r * 2.0, ring_r * 2.0)
+	rect.position = Vector2(-ring_r, -ring_r)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = _ring_shader
+	mat.set_shader_parameter("progress", 0.0)
+	mat.set_shader_parameter("fill_color", fill_col)
+	mat.set_shader_parameter("rim_color", rim_col)
+	rect.material = mat
+	marker.add_child(rect)
+
+	var sigil := Sprite2D.new()
+	sigil.texture = _sigil_tex
+	var s_sc := (ring_r * 1.65) / 512.0
+	sigil.scale = Vector2.ONE * s_sc * 0.65
+	sigil.modulate = Color(rim_col.r, rim_col.g, rim_col.b, 0.25)
+	marker.add_child(sigil)
+
+	add_child(marker)
+	_pending_spawns.append({
+		"id": enemy_id,
+		"pos": clamped,
+		"wave": wave,
+		"elapsed": 0.0,
+		"duration": maxf(0.05, dur),
+		"node": marker,
+		"mat": mat,
+		"sigil": sigil,
+		"base_sigil_scale": s_sc,
+		"rim_col": rim_col,
+		"ring_r": ring_r,
+	})
+
+
+func spawn_enemy(enemy_id: String, world_pos: Vector2, wave: int, is_mini: bool = false, materialize_dur: float = 0.0) -> Dictionary:
 	var slot: Dictionary = {}
 	for d in _pool:
 		if not bool(d["alive"]):
@@ -150,6 +209,9 @@ func spawn_enemy(enemy_id: String, world_pos: Vector2, wave: int, is_mini: bool 
 	slot["is_mini"] = is_mini
 	slot["resilience"] = CombatFormulas.calc_enemy_armor_resilience(danger_lvl, is_boss, enemy_id == "elite_warden")
 	slot["spawn_shield_timer"] = 1.2 if is_boss else 0.0
+	var emerge := materialize_dur if materialize_dur > 0.0 else (0.22 if is_mini else 0.0)
+	slot["materialize_timer"] = emerge
+	slot["materialize_dur"] = maxf(0.01, emerge)
 	slot["facing"] = Vector2.LEFT
 
 	# Status & AI timers
@@ -186,7 +248,12 @@ func spawn_enemy(enemy_id: String, world_pos: Vector2, wave: int, is_mini: bool 
 	elif is_mini:
 		visual_scale = 0.30
 	slot["base_scale"] = visual_scale
-	sp.scale = Vector2.ONE * visual_scale
+	if emerge > 0.0:
+		sp.scale = Vector2.ONE * (visual_scale * 0.3)
+		sp.modulate = Color(1.0, 1.0, 1.0, 0.15)
+	else:
+		sp.scale = Vector2.ONE * visual_scale
+		sp.modulate = Color.WHITE
 
 	var shadow: Sprite2D = slot["shadow"]
 	shadow.position = Vector2(0.0, 56.0 if is_boss else 24.0)
@@ -216,9 +283,17 @@ func spawn_enemy(enemy_id: String, world_pos: Vector2, wave: int, is_mini: bool 
 func clear_all() -> void:
 	_active_boss = {}
 	_grid.clear()
+	for ps in _pending_spawns:
+		if is_instance_valid(ps.get("node")):
+			(ps["node"] as Node).queue_free()
+	_pending_spawns.clear()
 	for d in _pool:
 		d["alive"] = false
 		(d["node"] as Node2D).visible = false
+
+
+func get_pending_count() -> int:
+	return _pending_spawns.size()
 
 
 func get_alive_count() -> int:
@@ -230,10 +305,47 @@ func get_alive_count() -> int:
 
 
 func has_active_boss() -> bool:
-	return not _active_boss.is_empty() and bool(_active_boss.get("alive", false))
+	if not _active_boss.is_empty() and bool(_active_boss.get("alive", false)):
+		return true
+	for ps in _pending_spawns:
+		if String(ps.get("id", "")).begins_with("boss_"):
+			return true
+	return false
+
+
+func _step_pending_spawns(delta: float) -> void:
+	for i in range(_pending_spawns.size() - 1, -1, -1):
+		var ps: Dictionary = _pending_spawns[i]
+		var el := float(ps["elapsed"]) + delta
+		var dur := float(ps["duration"])
+		ps["elapsed"] = el
+		var ratio := clampf(el / dur, 0.0, 1.0)
+		var mat: ShaderMaterial = ps["mat"]
+		mat.set_shader_parameter("progress", ratio)
+		var sigil: Sprite2D = ps["sigil"]
+		sigil.rotation += delta * 3.4
+		var sc := float(ps["base_sigil_scale"]) * (0.65 + 0.45 * ratio)
+		sigil.scale = Vector2.ONE * sc
+		var rc: Color = ps["rim_col"]
+		sigil.modulate = Color(rc.r, rc.g, rc.b, 0.25 + 0.65 * ratio)
+
+		if el >= dur:
+			if is_instance_valid(ps.get("node")):
+				(ps["node"] as Node).queue_free()
+			var eid := String(ps["id"])
+			var pos := Vector2(ps["pos"])
+			var wv := int(ps["wave"])
+			var r_px := float(ps["ring_r"])
+			_pending_spawns.remove_at(i)
+			spawn_enemy(eid, pos, wv, false, 0.22)
+			if _vfx != null:
+				_vfx.spawn_burst(pos, rc, r_px * 1.15, 0.20)
 
 
 func step(delta: float) -> void:
+	_step_pending_spawns(delta)
+	if _player == null:
+		return
 	_rebuild_grid()
 	var p_pos := _player.global_position
 
@@ -266,13 +378,17 @@ func step(delta: float) -> void:
 				if not bool(e["alive"]):
 					continue
 
-		_step_ai(e, delta, p_pos)
-		if not bool(e["alive"]):
-			continue
+		var emerging := float(e.get("materialize_timer", 0.0)) > 0.0
+		if emerging:
+			e["materialize_timer"] = maxf(0.0, float(e["materialize_timer"]) - delta)
+		else:
+			_step_ai(e, delta, p_pos)
+			if not bool(e["alive"]):
+				continue
 
 		# Soft separation against nearby enemies
 		var pos := Vector2(e["pos"])
-		var sep := _compute_separation(e, pos)
+		var sep := Vector2.ZERO if emerging else _compute_separation(e, pos)
 		pos += sep * delta
 		pos.x = clampf(pos.x, -585.0, 585.0)
 		pos.y = clampf(pos.y, -685.0, 685.0)
@@ -283,12 +399,19 @@ func step(delta: float) -> void:
 		var sp: Sprite2D = e["sprite"]
 		sp.flip_h = Vector2(e["facing"]).x < -0.05
 
-		# Procedural gait / hover / hit-squash animation
+		# Procedural gait / hover / hit-squash / spawn emergence animation
 		e["anim_phase"] = float(e["anim_phase"]) + delta * (4.0 if bool(e["is_boss"]) else 9.5)
 		e["hit_squash"] = maxf(0.0, float(e["hit_squash"]) - delta * 7.5)
 		var bs := float(e.get("base_scale", 0.42))
 		var sq := float(e["hit_squash"])
 		var ph := float(e["anim_phase"])
+		var emerge_scale := 1.0
+		if emerging:
+			var m_ratio := 1.0 - (float(e["materialize_timer"]) / float(e.get("materialize_dur", 0.22)))
+			sp.modulate = Color(1.0, 1.0, 1.0, clampf(m_ratio * 2.0, 0.2, 1.0))
+			emerge_scale = 0.30 + sin(minf(1.0, m_ratio) * PI * 0.62) * 0.80
+		else:
+			sp.modulate = Color.WHITE
 		if bool(e["is_boss"]):
 			var hover := sin(ph) * 6.0
 			sp.position = Vector2(0.0, hover)
@@ -300,12 +423,13 @@ func step(delta: float) -> void:
 			sp.rotation = sin(ph) * 0.08
 			if (e["aura"] as Sprite2D).visible:
 				(e["aura"] as Sprite2D).rotation += delta * 1.8
-		sp.scale = Vector2(bs * (1.0 + sq * 0.24), bs * (1.0 - sq * 0.20))
+		sp.scale = Vector2(bs * emerge_scale * (1.0 + sq * 0.24), bs * emerge_scale * (1.0 - sq * 0.20))
 
-		# Contact damage with player
-		var hit_r := float(e["radius"]) + 18.0
-		if pos.distance_squared_to(p_pos) <= hit_r * hit_r:
-			_player.take_damage(float(e["damage"]))
+		# Contact damage with player (disabled while emerging from summon rift)
+		if not emerging:
+			var hit_r := float(e["radius"]) + 18.0
+			if pos.distance_squared_to(p_pos) <= hit_r * hit_r:
+				_player.take_damage(float(e["damage"]))
 
 
 func _step_ai(e: Dictionary, delta: float, p_pos: Vector2) -> void:

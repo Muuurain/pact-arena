@@ -38,6 +38,14 @@ func _build_ui() -> void:
 	inner.add_theme_constant_override("separation", 14)
 	margin.add_child(inner)
 
+	var sigil := TextureRect.new()
+	sigil.texture = load("res://assets/art/sprites/arena/altar_sigil.png")
+	sigil.custom_minimum_size = Vector2(76, 76)
+	sigil.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	sigil.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	sigil.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	inner.add_child(sigil)
+
 	var title := Label.new()
 	title.text = "深渊血契祭坛"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -46,7 +54,7 @@ func _build_ui() -> void:
 	inner.add_child(title)
 
 	var sub := Label.new()
-	sub.text = "高风险高回报：签署一条禁忌血契，或拒绝诱惑保留稳健"
+	sub.text = "以肉身代价签下禁忌契约，或者挥手谢绝"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sub.add_theme_font_size_override("font_size", 18)
@@ -58,7 +66,7 @@ func _build_ui() -> void:
 	inner.add_child(_cards_box)
 
 	var skip_btn := Button.new()
-	skip_btn.text = "拒绝所有血契 (直接进入商店)"
+	skip_btn.text = "全都不签（直接去商店）"
 	UiStyles.style_button(skip_btn, UiStyles.COL_BORDER, false, 56.0)
 	skip_btn.pressed.connect(func():
 		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)

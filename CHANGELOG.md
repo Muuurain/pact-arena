@@ -5,6 +5,14 @@ All notable changes to **Pact Arena (血契竞技场)** will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-11-25
+
+### Improved & Polished
+- **怪物刷怪预警法阵与破阵入场动效**：新增 [EnemyManager.gd](src/combat/EnemyManager.gd) `queue_spawn_enemy()` 与地面着陆法阵 Shader 倒计时（常规怪 `0.65s`、精英 `0.85s`、Boss `0.95s`），入场瞬间带 `0.22s` 缩放浮现动效且期间免疫接触误伤；收紧并拉远安全生成环带至 `310–505px`（[ArenaController.gd](src/combat/ArenaController.gd)），彻底告别贴脸闪现撞怪。
+- **全界面触控手感与移动端图标放大升级**：升级 [UiStyles.gd](src/ui/UiStyles.gd) 全局面板阴影、按钮按压回弹缩放动效（`_attach_touch_bounce`）及弹窗渐入动画；放大主界面（[MainMenu.gd](src/ui/MainMenu.gd)）、战斗 HUD（[BattleHud.gd](src/ui/BattleHud.gd) 血晶图标与羁绊徽章）、商店/黑市（[ShopScreen.gd](src/ui/ShopScreen.gd) 72px 商品图与 52px 触控键）、图鉴（[CodexScreen.gd](src/ui/CodexScreen.gd) 80px 武器图与 72px 道具图）及出征备战（[HeroSelectScreen.gd](src/ui/HeroSelectScreen.gd) 96px 头像与初始武器图标栏）。
+- **信息分层减负与全界面居中大弹窗重构**：新增通用 `UiStyles.show_detail_modal()` 与 `UiStyles.make_centered_modal_shell()`；出征界面 **「热度加码」**（8 项全宽大卡片 + 全选/清空/确认）、商店 **「羁绊」/「属性」**（2 列大字面板）、图鉴 **「神系羁绊总览」**、设置与暂停界面全部升级为带暗色遮罩的居中大型弹窗，彻底告别窄框内联折叠难操作与文字拥挤问题。同时拓宽 `D0~D5` 难度档位卡片宽度以完整容纳高阶文案。
+- **全游戏文案玩家化润色**：全面重写 [GameData.gd](src/autoload/GameData.gd) 与各 UI 文案，剔除开发/AI 式术语（如“通过固有加成生效”、像素数值、生硬括号长句），统一为直白干脆的暗黑肉鸽战斗行话。
+
 ## [2.2.1] - 2026-11-25
 
 ### Added & Improved
