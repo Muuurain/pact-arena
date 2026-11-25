@@ -58,7 +58,7 @@ func _build_ui() -> void:
 	_embers_lbl.add_theme_color_override("font_color", UiStyles.COL_GOLD)
 	top_h.add_child(_embers_lbl)
 
-	var scroll := ScrollContainer.new()
+	var scroll := TouchScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.add_child(scroll)
 

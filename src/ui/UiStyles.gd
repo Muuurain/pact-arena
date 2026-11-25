@@ -154,3 +154,70 @@ static func make_android_nav_tile(icon_path: String, title_txt: String, sub_txt:
 
 	btn.pressed.connect(on_press)
 	return btn
+
+
+static func populate_synergy_details(container: Control, synergy_info: Dictionary = {}, show_progress: bool = false) -> void:
+	for c in container.get_children():
+		c.queue_free()
+
+	var counts: Dictionary = synergy_info.get("effective_counts", {})
+	var flags: Dictionary = synergy_info.get("flags", {})
+
+	var fac_hdr := Label.new()
+	fac_hdr.text = "【三大神系羁绊（同系武器 2 / 4 / 6 把激活；苍蓝魔导所需 -1）】"
+	fac_hdr.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	fac_hdr.add_theme_font_size_override("font_size", 15)
+	fac_hdr.add_theme_color_override("font_color", COL_AZURE)
+	container.add_child(fac_hdr)
+
+	for f in SynergyEngine.FACTIONS:
+		var meta: Dictionary = SynergyEngine.FACTION_META[f]
+		var fcol: Color = meta["color"]
+		var cnt: int = int(counts.get(f, 0))
+		var any_active: bool = (not show_progress) or (cnt >= 2)
+
+		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel", make_panel_style(COL_CARD, fcol if any_active else COL_BORDER, 12, 2 if any_active else 1))
+		container.add_child(card)
+
+		var cv := VBoxContainer.new()
+		cv.add_theme_constant_override("separation", 4)
+		card.add_child(cv)
+
+		var tl := Label.new()
+		tl.text = "%s系羁绊" % String(meta["name"]) + (" · 当前 %d 把" % cnt if show_progress else "")
+		tl.add_theme_font_size_override("font_size", 17)
+		tl.add_theme_color_override("font_color", fcol)
+		cv.add_child(tl)
+
+		for tier in [2, 4, 6]:
+			var reached: bool = show_progress and (cnt >= int(tier))
+			var prefix: String = ("✓ %d件：" % tier) if reached else ("%d件：" % tier)
+			var dl := Label.new()
+			dl.text = prefix + String(meta["desc_%d" % tier])
+			dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			dl.add_theme_font_size_override("font_size", 14)
+			dl.add_theme_color_override("font_color", COL_GOLD if reached else (Color.WHITE if not show_progress else COL_TEXT_DIM))
+			cv.add_child(dl)
+
+	var res_hdr := Label.new()
+	res_hdr.text = "【跨系双神融合共鸣（任意两系均达 2 阶自动激活）】"
+	res_hdr.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	res_hdr.add_theme_font_size_override("font_size", 15)
+	res_hdr.add_theme_color_override("font_color", COL_GOLD)
+	container.add_child(res_hdr)
+
+	for r in SynergyEngine.get_all_resonances():
+		var rid := String(r["id"])
+		var active: bool = show_progress and bool(flags.get(rid, false))
+		var rcard := PanelContainer.new()
+		rcard.add_theme_stylebox_override("panel", make_panel_style(COL_CARD, COL_GOLD if active else (COL_VOID if not show_progress else COL_BORDER), 12, 2 if (active or not show_progress) else 1))
+		container.add_child(rcard)
+
+		var rl := Label.new()
+		var badge := "✓ [已激活] " if active else ""
+		rl.text = "%s【%s】%s" % [badge, String(r["name"]), String(r["desc"])]
+		rl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		rl.add_theme_font_size_override("font_size", 14)
+		rl.add_theme_color_override("font_color", COL_GOLD if active else (Color.WHITE if not show_progress else COL_TEXT_DIM))
+		rcard.add_child(rl)

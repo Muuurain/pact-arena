@@ -58,7 +58,7 @@ func _build_ui() -> void:
 	_ban_info_lbl.add_theme_color_override("font_color", UiStyles.COL_GOLD)
 	top_h.add_child(_ban_info_lbl)
 
-	var scroll := ScrollContainer.new()
+	var scroll := TouchScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.add_child(scroll)
 
@@ -81,6 +81,12 @@ func refresh_ui() -> void:
 
 	for c in _list_box.get_children():
 		c.queue_free()
+
+	var syn_box := VBoxContainer.new()
+	syn_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	syn_box.add_theme_constant_override("separation", 8)
+	_list_box.add_child(syn_box)
+	UiStyles.populate_synergy_details(syn_box, {}, false)
 
 	var wh := Label.new()
 	wh.text = "【14把武装精通与四阶双路线觉醒】(Lv.2 可作为任意英雄开局武器)"

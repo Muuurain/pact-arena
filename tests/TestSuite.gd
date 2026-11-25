@@ -25,6 +25,7 @@ func _run_all() -> void:
 	_test_synergies_and_dual_resonances()
 	_test_weapon_merge_and_awakening()
 	_test_shop_and_save_persistence()
+	await _test_touch_scroll_container()
 	await _test_full_ui_and_combat_integration()
 
 	if _failures.is_empty():
@@ -92,6 +93,11 @@ func _test_synergies_and_dual_resonances() -> void:
 	_assert(bool(flags.get("res_blood_lightning", false)), "2 Crimson + 2 Azure activates Blood Lightning")
 	_assert(bool(flags.get("res_soul_curse", false)), "2 Crimson + 2 Void activates Soul Curse")
 	_assert(bool(flags.get("res_void_storm", false)), "2 Azure + 2 Void activates Void Storm")
+	_assert(SynergyEngine.get_all_resonances().size() == 3, "All 3 dual resonances documented in SynergyEngine")
+	var eff_lines := SynergyEngine.format_active_effects(run.synergy_info)
+	_assert(eff_lines.size() >= 6, "SynergyEngine formats concrete active tier & resonance effects")
+	var shop_sum := SynergyEngine.format_shop_summary(run.synergy_info)
+	_assert(shop_sum.contains("生效：") and shop_sum.contains("暴击率+10%"), "Shop synergy summary explains concrete effects")
 
 
 func _test_weapon_merge_and_awakening() -> void:
@@ -157,6 +163,82 @@ func _test_shop_and_save_persistence() -> void:
 	SaveManager.save_meta()
 
 
+func _test_touch_scroll_container() -> void:
+	var sc := TouchScrollContainer.new()
+	sc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var vb := VBoxContainer.new()
+	vb.custom_minimum_size = Vector2(720, 2200)
+	sc.add_child(vb)
+
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(720, 120)
+	vb.add_child(card)
+
+	var icon := TextureRect.new()
+	icon.custom_minimum_size = Vector2(64, 64)
+	card.add_child(icon)
+
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(720, 1200)
+	var clicks := {"n": 0}
+	btn.pressed.connect(func(): clicks["n"] = int(clicks["n"]) + 1)
+	vb.add_child(btn)
+
+	get_tree().root.add_child(sc)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	_assert(card.mouse_filter == Control.MOUSE_FILTER_PASS, "TouchScrollContainer converts PanelContainer MOUSE_FILTER_STOP to PASS")
+	_assert(btn.mouse_filter == Control.MOUSE_FILTER_PASS, "TouchScrollContainer converts Button MOUSE_FILTER_STOP to PASS")
+	_assert(sc.scroll_deadzone >= 10, "TouchScrollContainer sets protective scroll deadzone")
+
+	# Normal short tap on Button still clicks normally
+	for p in [true, false]:
+		var tap_ev := InputEventMouseButton.new()
+		tap_ev.device = 0
+		tap_ev.button_index = MOUSE_BUTTON_LEFT
+		tap_ev.pressed = p
+		tap_ev.position = Vector2(20, 40)
+		tap_ev.global_position = Vector2(20, 40)
+		Input.parse_input_event(tap_ev)
+		await get_tree().process_frame
+	_assert(int(clicks["n"]) == 1, "Short tap on Button inside TouchScrollContainer still clicks")
+
+	# Drag upward across Button (within root viewport rect) -> scrolls and suppresses click
+	var mb_d := InputEventMouseButton.new()
+	mb_d.device = 0
+	mb_d.button_index = MOUSE_BUTTON_LEFT
+	mb_d.pressed = true
+	mb_d.position = Vector2(20, 40)
+	mb_d.global_position = Vector2(20, 40)
+	Input.parse_input_event(mb_d)
+	await get_tree().process_frame
+
+	for s in range(1, 5):
+		var mm := InputEventMouseMotion.new()
+		mm.device = 0
+		mm.button_mask = MOUSE_BUTTON_MASK_LEFT
+		mm.position = Vector2(20, 40 - s * 5.0)
+		mm.global_position = Vector2(20, 40 - s * 5.0)
+		mm.relative = Vector2(0, -5.0)
+		Input.parse_input_event(mm)
+		await get_tree().process_frame
+
+	var mb_u := InputEventMouseButton.new()
+	mb_u.device = 0
+	mb_u.button_index = MOUSE_BUTTON_LEFT
+	mb_u.pressed = false
+	mb_u.position = Vector2(20, 20)
+	mb_u.global_position = Vector2(20, 20)
+	Input.parse_input_event(mb_u)
+	await get_tree().process_frame
+
+	_assert(sc.scroll_vertical > 100, "Dragging starting on child Button/Icon scrolls TouchScrollContainer")
+	_assert(int(clicks["n"]) == 1, "Dragging across Button suppresses extra accidental click")
+	sc.queue_free()
+	await get_tree().process_frame
+
+
 func _test_full_ui_and_combat_integration() -> void:
 	var main_scene := load("res://src/scenes/Main.tscn") as PackedScene
 	_assert(main_scene != null, "Main.tscn loads cleanly")
@@ -174,7 +256,7 @@ func _test_full_ui_and_combat_integration() -> void:
 	inst._sanctuary.visible = false
 
 	inst._codex.open()
-	_assert(inst._codex.visible, "CodexScreen opens cleanly")
+	_assert(inst._codex.visible and inst._codex._list_box.get_child_count() >= 34, "CodexScreen opens cleanly with synergy & weapon/item entries")
 	inst._codex.visible = false
 
 	# Test Wave 5 Boss combat + Toxic Blood pact + 6 diverse weapons firing
@@ -224,8 +306,14 @@ func _test_full_ui_and_combat_integration() -> void:
 	inst._pact_modal.visible = false
 
 	inst._shop.open_for_run(run, true)
-	_assert(inst._shop.visible, "ShopScreen opens cleanly")
+	_assert(inst._shop.visible and inst._shop._synergy_detail_box.get_child_count() >= 8, "ShopScreen opens cleanly with detailed synergy drawer")
 	inst._shop.visible = false
+
+	inst.hud.bind_run(run, inst.arena.player)
+	_assert(inst.hud._synergy_box.get_child_count() >= 4, "BattleHud renders active faction & resonance pills")
+	inst.hud._toggle_pause()
+	_assert(inst.hud._pause_synergy_lbl.text.contains("攻速+14%") and inst.hud._pause_synergy_lbl.text.contains("虚空磁暴"), "Pause modal shows active synergy & resonance details")
+	inst.hud._toggle_pause()
 
 	var asura_shop := RunState.new()
 	asura_shop.start_new_run("hero_one_arm_asura", "wpn_chainsaw", [])

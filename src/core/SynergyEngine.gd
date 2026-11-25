@@ -28,6 +28,27 @@ const FACTION_META: Dictionary = {
 	},
 }
 
+const RESONANCE_META: Array[Dictionary] = [
+	{
+		"id": "res_blood_lightning",
+		"name": "血雷风暴",
+		"req_text": "猩红2 + 苍蓝2",
+		"desc": "猩红2+苍蓝2：暴击劈出2道吸血血雷",
+	},
+	{
+		"id": "res_soul_curse",
+		"name": "嗜魂诅咒",
+		"req_text": "猩红2 + 虚空2",
+		"desc": "猩红2+虚空2：流血或诅咒怪死亡触发血爆",
+	},
+	{
+		"id": "res_void_storm",
+		"name": "虚空磁暴",
+		"req_text": "苍蓝2 + 虚空2",
+		"desc": "苍蓝2+虚空2：电弧/冰霜22%概率生成引力奇点",
+	},
+]
+
 
 static func evaluate(weapons: Array, hero_id: String) -> Dictionary:
 	var counts := {"crimson": 0, "azure": 0, "void": 0}
@@ -112,12 +133,50 @@ static func _add_mod(d: Dictionary, k: String, v: float) -> void:
 	d[k] = float(d.get(k, 0.0)) + v
 
 
+static func get_all_resonances() -> Array[Dictionary]:
+	return RESONANCE_META
+
+
 static func get_active_resonances(flags: Dictionary) -> Array[Dictionary]:
 	var res: Array[Dictionary] = []
-	if bool(flags.get("res_blood_lightning", false)):
-		res.append({"id": "res_blood_lightning", "name": "血雷风暴", "desc": "猩红2+苍蓝2：暴击劈出2道吸血血雷"})
-	if bool(flags.get("res_soul_curse", false)):
-		res.append({"id": "res_soul_curse", "name": "嗜魂诅咒", "desc": "猩红2+虚空2：流血或诅咒怪死亡触发血爆"})
-	if bool(flags.get("res_void_storm", false)):
-		res.append({"id": "res_void_storm", "name": "虚空磁暴", "desc": "苍蓝2+虚空2：电弧/冰霜22%概率生成引力奇点"})
+	for meta in RESONANCE_META:
+		if bool(flags.get(String(meta["id"]), false)):
+			res.append(meta)
 	return res
+
+
+static func format_active_effects(synergy_info: Dictionary) -> Array[String]:
+	var lines: Array[String] = []
+	var counts: Dictionary = synergy_info.get("effective_counts", {})
+	var flags: Dictionary = synergy_info.get("flags", {})
+	for f in FACTIONS:
+		var cnt := int(counts.get(f, 0))
+		if cnt < 2:
+			continue
+		var meta: Dictionary = FACTION_META[f]
+		var fname := String(meta["name"])
+		for tier in [2, 4, 6]:
+			if cnt >= tier:
+				lines.append("[%s%d] %s" % [fname, tier, String(meta["desc_%d" % tier])])
+	for r in get_active_resonances(flags):
+		lines.append("【%s】 %s" % [String(r["name"]), String(r["desc"])])
+	return lines
+
+
+static func format_shop_summary(synergy_info: Dictionary) -> String:
+	var counts: Dictionary = synergy_info.get("effective_counts", {})
+	var syn_parts: Array[String] = []
+	for f in FACTIONS:
+		var cnt := int(counts.get(f, 0))
+		syn_parts.append("%s%d" % [String(FACTION_META[f]["name"]), cnt])
+	var res_names: Array[String] = []
+	for r in get_active_resonances(synergy_info.get("flags", {})):
+		res_names.append("【%s】" % String(r["name"]))
+	var header := "羁绊：%s" % "  ".join(syn_parts)
+	if not res_names.is_empty():
+		header += "  " + "".join(res_names)
+
+	var active := format_active_effects(synergy_info)
+	if active.is_empty():
+		return header + "\n提示：凑齐同系 2/4/6 把武器激活神系增益，双系 2+2 解锁融合共鸣（点击右上【羁绊】查看全效果）"
+	return header + "\n生效：" + "；".join(active)

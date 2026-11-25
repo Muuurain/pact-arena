@@ -70,7 +70,7 @@ func _build_ui() -> void:
 	top_h.add_child(_embers_lbl)
 
 	# Scrollable Hero List
-	var scroll := ScrollContainer.new()
+	var scroll := TouchScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root_v.add_child(scroll)
 
@@ -81,13 +81,14 @@ func _build_ui() -> void:
 
 	# Starting Weapon Picker
 	var w_lbl := Label.new()
-	w_lbl.text = "初始武器选择（精通 Lv.2 以上武器可作为通用开局武器）："
+	w_lbl.text = "初始武器与神系选择（同系 2/4/6 把激活羁绊；精通 Lv.2 可作通用开局武器）："
+	w_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	w_lbl.add_theme_font_size_override("font_size", 15)
 	w_lbl.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
 	root_v.add_child(w_lbl)
 
-	var w_scroll := ScrollContainer.new()
-	w_scroll.custom_minimum_size.y = 74
+	var w_scroll := TouchScrollContainer.new()
+	w_scroll.custom_minimum_size.y = 84
 	w_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root_v.add_child(w_scroll)
 
@@ -229,11 +230,12 @@ func _rebuild_weapon_bar() -> void:
 		if wid != def_w and m_lv < 2:
 			continue
 		var is_sel := (_selected_weapon == wid)
+		var fac_n := UiStyles.faction_name(String(w["faction"]))
 		var btn := Button.new()
-		btn.text = "%s%s" % [String(w["name"]), " (专属)" if wid == def_w else ""]
-		btn.custom_minimum_size = Vector2(148, 56)
-		UiStyles.style_button(btn, UiStyles.faction_color(String(w["faction"])), is_sel, 56.0)
-		btn.add_theme_font_size_override("font_size", 15)
+		btn.text = "%s\n%s系%s" % [String(w["name"]), fac_n, "·专属" if wid == def_w else ""]
+		btn.custom_minimum_size = Vector2(156, 62)
+		UiStyles.style_button(btn, UiStyles.faction_color(String(w["faction"])), is_sel, 62.0)
+		btn.add_theme_font_size_override("font_size", 14)
 		btn.pressed.connect(func():
 			_selected_weapon = wid
 			EventBus.sfx_requested.emit("sfx_ui_click", 0.0)

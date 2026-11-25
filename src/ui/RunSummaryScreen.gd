@@ -25,7 +25,7 @@ func _build_ui() -> void:
 	bg.color = Color(0.04, 0.02, 0.08, 0.94)
 	add_child(bg)
 
-	var scroll := ScrollContainer.new()
+	var scroll := TouchScrollContainer.new()
 	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	UiStyles.apply_safe_area_padding(scroll, 28.0, 26.0)
 	add_child(scroll)

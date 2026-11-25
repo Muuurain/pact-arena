@@ -33,6 +33,7 @@ var _dash_pips: Array[ColorRect] = []
 var _prev_charges: int = 2
 
 var _pause_panel: PanelContainer
+var _pause_synergy_lbl: Label
 
 
 func _ready() -> void:
@@ -211,7 +212,8 @@ func _build_ui() -> void:
 	bars_v.add_child(_xp_bar)
 
 	_synergy_box = HBoxContainer.new()
-	_synergy_box.add_theme_constant_override("separation", 10)
+	_synergy_box.add_theme_constant_override("separation", 8)
+	_synergy_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bars_v.add_child(_synergy_box)
 
 	# ANDROID ERGONOMIC BLOOD DASH SKILL PAD WITH LIVE COOLDOWN SECONDS
@@ -299,17 +301,17 @@ func _build_ui() -> void:
 func _build_pause_modal(root: Control) -> void:
 	_pause_panel = PanelContainer.new()
 	_pause_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_pause_panel.offset_left = -220
-	_pause_panel.offset_right = 220
-	_pause_panel.offset_top = -180
-	_pause_panel.offset_bottom = 180
+	_pause_panel.offset_left = -240
+	_pause_panel.offset_right = 240
+	_pause_panel.offset_top = -230
+	_pause_panel.offset_bottom = 230
 	_pause_panel.visible = false
 	_pause_panel.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 	_pause_panel.add_theme_stylebox_override("panel", UiStyles.make_panel_style(Color(0.09, 0.07, 0.16, 0.98), UiStyles.COL_CRIMSON, 18, 3))
 	root.add_child(_pause_panel)
 
 	var pv := VBoxContainer.new()
-	pv.add_theme_constant_override("separation", 16)
+	pv.add_theme_constant_override("separation", 12)
 	_pause_panel.add_child(pv)
 
 	var title := Label.new()
@@ -318,9 +320,15 @@ func _build_pause_modal(root: Control) -> void:
 	title.add_theme_font_size_override("font_size", 28)
 	pv.add_child(title)
 
+	_pause_synergy_lbl = Label.new()
+	_pause_synergy_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_pause_synergy_lbl.add_theme_font_size_override("font_size", 14)
+	_pause_synergy_lbl.add_theme_color_override("font_color", UiStyles.COL_AZURE)
+	pv.add_child(_pause_synergy_lbl)
+
 	var resume_btn := Button.new()
 	resume_btn.text = "继续战斗"
-	UiStyles.style_button(resume_btn, UiStyles.COL_EMERALD, true, 56.0)
+	UiStyles.style_button(resume_btn, UiStyles.COL_EMERALD, true, 54.0)
 	resume_btn.pressed.connect(_toggle_pause)
 	pv.add_child(resume_btn)
 
@@ -332,7 +340,7 @@ func _build_pause_modal(root: Control) -> void:
 
 	var exit_btn := Button.new()
 	exit_btn.text = "返回主菜单 (不保存本波进度)"
-	UiStyles.style_button(exit_btn, UiStyles.COL_CRIMSON, false, 54.0)
+	UiStyles.style_button(exit_btn, UiStyles.COL_CRIMSON, false, 52.0)
 	exit_btn.pressed.connect(func():
 		get_tree().paused = false
 		_pause_panel.visible = false
@@ -362,11 +370,18 @@ func _refresh_synergy_pills() -> void:
 		var n := int(counts.get(f, 0))
 		if n <= 0:
 			continue
+		var stars := "★★★" if n >= 6 else ("★★" if n >= 4 else ("★" if n >= 2 else "/2"))
 		var lbl := Label.new()
-		lbl.text = "%s %d" % [UiStyles.faction_name(f), n]
-		lbl.add_theme_font_size_override("font_size", 15)
-		lbl.add_theme_color_override("font_color", UiStyles.faction_color(f))
+		lbl.text = "%s %d%s" % [UiStyles.faction_name(f), n, stars]
+		lbl.add_theme_font_size_override("font_size", 14)
+		lbl.add_theme_color_override("font_color", UiStyles.faction_color(f) if n >= 2 else UiStyles.COL_TEXT_DIM)
 		_synergy_box.add_child(lbl)
+	for r in SynergyEngine.get_active_resonances(_run.synergy_info.get("flags", {})):
+		var rlbl := Label.new()
+		rlbl.text = "⚡" + String(r["name"])
+		rlbl.add_theme_font_size_override("font_size", 14)
+		rlbl.add_theme_color_override("font_color", UiStyles.COL_GOLD)
+		_synergy_box.add_child(rlbl)
 
 
 func _style_progress(bar: ProgressBar, col: Color) -> void:
@@ -383,6 +398,12 @@ func _style_progress(bar: ProgressBar, col: Color) -> void:
 func _toggle_pause() -> void:
 	var p := not get_tree().paused
 	get_tree().paused = p
+	if p and _run != null and _pause_synergy_lbl != null:
+		var effects := SynergyEngine.format_active_effects(_run.synergy_info)
+		if effects.is_empty():
+			_pause_synergy_lbl.text = "当前生效羁绊：暂未激活（凑齐同系 2/4/6 把或双系 2+2 激活共鸣）"
+		else:
+			_pause_synergy_lbl.text = "当前生效羁绊：\n" + "\n".join(effects)
 	_pause_panel.visible = p
 	EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
 

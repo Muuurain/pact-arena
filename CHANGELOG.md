@@ -5,6 +5,16 @@ All notable changes to **Pact Arena (血契竞技场)** will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-11-25
+
+### Improved & Fixed
+- **全面补全神系羁绊与融合共鸣效果说明**：
+  - [SynergyEngine.gd](src/core/SynergyEngine.gd) 与 [UiStyles.gd](src/ui/UiStyles.gd) 集中定义并格式化三神系（猩红 / 苍蓝 / 虚空）2/4/6 阶具体加成与三项双神融合共鸣（血雷风暴 / 嗜魂诅咒 / 虚空磁暴）。
+  - **商店界面（[ShopScreen.gd](src/ui/ShopScreen.gd)）**：顶部实时展示当前已生效的羁绊/共鸣具体数值效果；新增「羁绊」抽屉详情按钮，高亮已激活档位并展示未达成目标，武器货架卡片同步标出所属神系当前持有计数。
+  - **图鉴与备战/战斗 HUD（[CodexScreen.gd](src/ui/CodexScreen.gd) / [HeroSelectScreen.gd](src/ui/HeroSelectScreen.gd) / [BattleHud.gd](src/ui/BattleHud.gd)）**：图鉴顶部新增全羁绊与双神共鸣说明；出征备战初始武器按钮标明神系；战斗 HUD 展示阶位进度与共鸣图标，暂停弹窗列出当前生效羁绊详情。
+- **修复全界面滚动容器在图标/卡片/按钮上无法拖动的问题（[TouchScrollContainer.gd](src/ui/TouchScrollContainer.gd)）**：
+  - 将全部列表及横向选择条迁移至 `TouchScrollContainer`，自动将子树内 `PanelContainer`、`Button`、`CheckButton`、`ColorRect` 等默认 `MOUSE_FILTER_STOP` 控件设为 `MOUSE_FILTER_PASS`（同时保留有意的 `MOUSE_FILTER_IGNORE` 遮罩），并配置 `14px` 滑动死区配合 `NOTIFICATION_SCROLL_BEGIN` 防误触点击，兼顾移动端触控滑动与桌面端鼠标左键拖拽/滚轮滚动。
+
 ## [2.0.1] - 2026-11-25
 
 ### Fixed

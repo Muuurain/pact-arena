@@ -9,12 +9,15 @@ signal awakening_needed(slot_idx: int, weapon_id: String)
 var _run: RunState
 var _selected_slot: int = -1
 var _stats_drawer_open: bool = false
+var _synergy_drawer_open: bool = false
 
 var _header_lbl: Label
 var _crystals_lbl: Label
 var _synergy_lbl: Label
 var _stats_panel: PanelContainer
 var _stats_grid: GridContainer
+var _synergy_panel: PanelContainer
+var _synergy_detail_box: VBoxContainer
 var _slots_grid: GridContainer
 var _slot_action_bar: PanelContainer
 var _slot_detail_lbl: Label
@@ -53,39 +56,57 @@ func _build_ui() -> void:
 	top_p.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_PANEL, UiStyles.COL_BORDER, 14, 2))
 	root_v.add_child(top_p)
 
-	var top_h := HBoxContainer.new()
-	top_h.add_theme_constant_override("separation", 10)
-	top_p.add_child(top_h)
+	var top_v := VBoxContainer.new()
+	top_v.add_theme_constant_override("separation", 6)
+	top_p.add_child(top_v)
 
-	var hv := VBoxContainer.new()
-	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_h.add_child(hv)
+	var top_h := HBoxContainer.new()
+	top_h.add_theme_constant_override("separation", 8)
+	top_v.add_child(top_h)
 
 	_header_lbl = Label.new()
-	_header_lbl.add_theme_font_size_override("font_size", 22)
-	hv.add_child(_header_lbl)
-
-	_synergy_lbl = Label.new()
-	_synergy_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_synergy_lbl.add_theme_font_size_override("font_size", 15)
-	_synergy_lbl.add_theme_color_override("font_color", UiStyles.COL_AZURE)
-	hv.add_child(_synergy_lbl)
+	_header_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_header_lbl.add_theme_font_size_override("font_size", 21)
+	top_h.add_child(_header_lbl)
 
 	_crystals_lbl = Label.new()
-	_crystals_lbl.add_theme_font_size_override("font_size", 24)
+	_crystals_lbl.add_theme_font_size_override("font_size", 22)
 	_crystals_lbl.add_theme_color_override("font_color", UiStyles.COL_GOLD)
 	top_h.add_child(_crystals_lbl)
 
+	var syn_toggle := Button.new()
+	syn_toggle.text = "羁绊"
+	syn_toggle.custom_minimum_size = Vector2(68, 46)
+	UiStyles.style_button(syn_toggle, UiStyles.COL_VOID, false, 46.0)
+	syn_toggle.pressed.connect(func():
+		_synergy_drawer_open = not _synergy_drawer_open
+		_synergy_panel.visible = _synergy_drawer_open
+		if _synergy_drawer_open:
+			_stats_drawer_open = false
+			_stats_panel.visible = false
+		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
+	)
+	top_h.add_child(syn_toggle)
+
 	var stats_toggle := Button.new()
 	stats_toggle.text = "属性"
-	stats_toggle.custom_minimum_size = Vector2(78, 48)
-	UiStyles.style_button(stats_toggle, UiStyles.COL_AZURE, false, 48.0)
+	stats_toggle.custom_minimum_size = Vector2(68, 46)
+	UiStyles.style_button(stats_toggle, UiStyles.COL_AZURE, false, 46.0)
 	stats_toggle.pressed.connect(func():
 		_stats_drawer_open = not _stats_drawer_open
 		_stats_panel.visible = _stats_drawer_open
+		if _stats_drawer_open:
+			_synergy_drawer_open = false
+			_synergy_panel.visible = false
 		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
 	)
 	top_h.add_child(stats_toggle)
+
+	_synergy_lbl = Label.new()
+	_synergy_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_synergy_lbl.add_theme_font_size_override("font_size", 14)
+	_synergy_lbl.add_theme_color_override("font_color", UiStyles.COL_AZURE)
+	top_v.add_child(_synergy_lbl)
 
 	# FOLDABLE FULL STATS DRAWER
 	_stats_panel = PanelContainer.new()
@@ -99,8 +120,23 @@ func _build_ui() -> void:
 	_stats_grid.add_theme_constant_override("v_separation", 6)
 	_stats_panel.add_child(_stats_grid)
 
+	# FOLDABLE SYNERGY & RESONANCE EFFECTS DRAWER
+	_synergy_panel = PanelContainer.new()
+	_synergy_panel.visible = false
+	_synergy_panel.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, UiStyles.COL_VOID, 12, 2))
+	root_v.add_child(_synergy_panel)
+
+	var syn_scroll := TouchScrollContainer.new()
+	syn_scroll.custom_minimum_size.y = 300
+	_synergy_panel.add_child(syn_scroll)
+
+	_synergy_detail_box = VBoxContainer.new()
+	_synergy_detail_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_synergy_detail_box.add_theme_constant_override("separation", 8)
+	syn_scroll.add_child(_synergy_detail_box)
+
 	# SCROLLABLE MIDDLE: WEAPONS + OFFERS
-	var scroll := ScrollContainer.new()
+	var scroll := TouchScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root_v.add_child(scroll)
 
@@ -192,6 +228,10 @@ func open_for_run(run: RunState, generate_new_stock: bool = true) -> void:
 	_run = run
 	_run.phase = "shop"
 	_selected_slot = -1
+	_stats_drawer_open = false
+	_stats_panel.visible = false
+	_synergy_drawer_open = false
+	_synergy_panel.visible = false
 	_slot_action_bar.visible = false
 	if generate_new_stock or _run.shop_offers.is_empty():
 		_run.shop_rerolls = 0
@@ -209,15 +249,9 @@ func refresh_ui() -> void:
 	_header_lbl.text = "第 %d 波整备 | 血契 %d" % [_run.wave, _run.pacts.size()]
 	_crystals_lbl.text = "血晶: %d" % _run.crystals
 
-	# Synergy & Resonance summary
-	var counts: Dictionary = _run.synergy_info.get("effective_counts", {})
-	var syn_parts: Array[String] = []
-	for f in SynergyEngine.FACTIONS:
-		syn_parts.append("%s%d" % [UiStyles.faction_name(f), int(counts.get(f, 0))])
-	var res_list := SynergyEngine.get_active_resonances(_run.synergy_info.get("flags", {}))
-	for r in res_list:
-		syn_parts.append("【%s】" % String(r["name"]))
-	_synergy_lbl.text = "羁绊：" + "  ".join(syn_parts)
+	# Synergy & Resonance summary + detailed drawer
+	_synergy_lbl.text = SynergyEngine.format_shop_summary(_run.synergy_info)
+	UiStyles.populate_synergy_details(_synergy_detail_box, _run.synergy_info, true)
 
 	# Full Stats Drawer
 	for c in _stats_grid.get_children():
@@ -425,10 +459,12 @@ func _rebuild_offers() -> void:
 			nl.add_theme_color_override("font_color", tcol)
 			tv.add_child(nl)
 
+			var fac := String(wdef["faction"])
+			var eff_cnt := int((_run.synergy_info.get("effective_counts", {}) as Dictionary).get(fac, 0))
 			var tag_l := Label.new()
-			tag_l.text = ("★可合成升阶!" if can_merge else ("▲可替换升阶!" if can_replace else UiStyles.faction_name(String(wdef["faction"])) + "系"))
+			tag_l.text = ("★可合成升阶!" if can_merge else ("▲可替换升阶!" if can_replace else "%s系 (现有%d)" % [UiStyles.faction_name(fac), eff_cnt]))
 			tag_l.add_theme_font_size_override("font_size", 13)
-			tag_l.add_theme_color_override("font_color", UiStyles.COL_GOLD if can_merge else (UiStyles.COL_AZURE if can_replace else UiStyles.faction_color(String(wdef["faction"]))))
+			tag_l.add_theme_color_override("font_color", UiStyles.COL_GOLD if can_merge else (UiStyles.COL_AZURE if can_replace else UiStyles.faction_color(fac)))
 			tv.add_child(tag_l)
 
 			var dl := Label.new()
