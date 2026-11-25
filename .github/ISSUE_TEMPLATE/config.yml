@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 游戏设计与架构文档
+    url: https://github.com/Muuurain/pact-arena/blob/main/docs/GAME_DESIGN.md
+    about: 提出新机制前可先查看当前完整数值公式与流派设计说明

@@ -1,0 +1,27 @@
+# Normalize line endings across Windows/Linux/macOS contributors
+* text=auto eol=lf
+
+# Godot text scenes & scripts
+*.gd text eol=lf
+*.tscn text eol=lf
+*.tres text eol=lf
+*.gdshader text eol=lf
+*.cfg text eol=lf
+*.godot text eol=lf
+*.import text eol=lf
+
+# Scripts & Docs
+*.py text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.svg text eol=lf
+
+# Binary media assets
+*.png binary
+*.webp binary
+*.ogg binary
+*.wav binary
