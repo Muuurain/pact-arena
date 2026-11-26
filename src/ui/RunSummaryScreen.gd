@@ -130,6 +130,17 @@ func _format_stats_summary(run: RunState, embers: int, unlocked: Array) -> Strin
 		for pid in run.pacts:
 			lines.append("  • " + String(GameData.get_pact(pid).get("name", pid)))
 
+	var item_summary := run.get_item_counts_summary()
+	lines.append("")
+	lines.append("已购道具（共 %d 件 / %d 种）：" % [run.items.size(), item_summary.size()])
+	if item_summary.is_empty():
+		lines.append("  无")
+	else:
+		for entry in item_summary:
+			var idef: Dictionary = entry["def"]
+			var cnt := int(entry["count"])
+			lines.append("  • %s ×%d（%s）" % [String(idef.get("name", entry["id"])), cnt, RunState.format_item_mods_summary(idef, cnt)])
+
 	lines.append("")
 	lines.append("武器击杀贡献：")
 	for wid in run.weapon_kills_this_run:

@@ -332,7 +332,7 @@ func _build_pause_modal(root: Control) -> void:
 	pv.add_child(title)
 
 	var syn_scroll := TouchScrollContainer.new()
-	syn_scroll.custom_minimum_size = Vector2(0, 150)
+	syn_scroll.custom_minimum_size = Vector2(0, 220)
 	pv.add_child(syn_scroll)
 
 	_pause_synergy_lbl = Label.new()
@@ -440,10 +440,21 @@ func _toggle_pause() -> void:
 	get_tree().paused = p
 	if p and _run != null and _pause_synergy_lbl != null:
 		var effects := SynergyEngine.format_active_effects(_run.synergy_info)
+		var pause_text := ""
 		if effects.is_empty():
-			_pause_synergy_lbl.text = "当前生效羁绊：暂未激活（凑齐同系 2/4/6 把或双系 2+2 激活共鸣）"
+			pause_text = "当前生效羁绊：暂未激活（凑齐同系 2/4/6 把或双系 2+2 激活共鸣）"
 		else:
-			_pause_synergy_lbl.text = "当前生效羁绊：\n" + "\n".join(effects)
+			pause_text = "当前生效羁绊：\n" + "\n".join(effects)
+		var item_summary := _run.get_item_counts_summary()
+		if item_summary.is_empty():
+			pause_text += "\n\n已购道具：暂无"
+		else:
+			var parts: Array[String] = []
+			for entry in item_summary:
+				var idef: Dictionary = entry["def"]
+				parts.append("%s ×%d" % [String(idef.get("name", entry["id"])), int(entry["count"])])
+			pause_text += "\n\n已购道具（共 %d 件 / %d 种）：\n%s" % [_run.items.size(), item_summary.size(), " · ".join(parts)]
+		_pause_synergy_lbl.text = pause_text
 	_pause_modal.visible = p
 	EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
 

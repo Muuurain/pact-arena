@@ -6,6 +6,8 @@ extends RefCounted
 const TIER_DAMAGE_MULT: Array[float] = [1.0, 1.32, 1.75, 2.38]
 const TIER_COOLDOWN_MULT: Array[float] = [1.0, 0.93, 0.85, 0.77]
 const TIER_PRICE_MULT: Array[float] = [1.0, 1.90, 3.50, 6.20]
+const DUPLICATE_ITEM_PRICE_BASE: float = 1.50
+const DUPLICATE_ITEM_MAX_STACKS: int = 16
 
 
 static func calc_weapon_damage(
@@ -114,18 +116,41 @@ static func calc_xp_needed(level: int) -> float:
 	return floorf(14.0 + float(level - 1) * 11.0 + pow(float(level - 1), 1.35) * 4.5)
 
 
+static func calc_endless_income_mult(wave: int) -> float:
+	if wave <= 10:
+		return 1.0
+	return pow(1.09, float(wave - 10))
+
+
+static func calc_wave_inflation(wave: int) -> float:
+	var w := float(mini(9, maxi(0, wave - 1)))
+	var mult := 1.0 + w * 0.24 + pow(w, 1.65) * 0.038
+	if wave > 10:
+		# Endless mode anchors W10 baseline (4.59x) and paces inflation slightly above
+		# Endless crystal growth (1.12 vs 1.09) so every Endless wave funds 1-2 upgrades.
+		mult *= pow(1.12, float(wave - 10))
+	return mult
+
+
+static func calc_duplicate_item_mult(owned_count: int) -> float:
+	if owned_count <= 0:
+		return 1.0
+	return pow(DUPLICATE_ITEM_PRICE_BASE, float(mini(owned_count, DUPLICATE_ITEM_MAX_STACKS)))
+
+
 static func calc_shop_price(
 	base_price: int,
 	tier: int,
 	wave: int,
 	discount_pct: float,
 	heat_inflation: bool,
-	danger_price_mult: float = 1.0
+	danger_price_mult: float = 1.0,
+	duplicate_owned: int = 0
 ) -> int:
 	var idx := clampi(tier - 1, 0, 3)
-	var w := float(maxi(0, wave - 1))
-	var wave_inflation := 1.0 + w * 0.13 + pow(w, 1.45) * 0.025
-	var p := float(base_price) * TIER_PRICE_MULT[idx] * wave_inflation
+	var wave_inflation := calc_wave_inflation(wave)
+	var dup_mult := calc_duplicate_item_mult(duplicate_owned)
+	var p := float(base_price) * TIER_PRICE_MULT[idx] * wave_inflation * dup_mult
 	p *= maxf(1.0, danger_price_mult)
 	if heat_inflation:
 		p *= 1.18
@@ -139,7 +164,8 @@ static func calc_reroll_cost(wave: int, rerolls_this_shop: int, free_rerolls: in
 	var paid := rerolls_this_shop - free_rerolls
 	var base := 5 + wave * 2
 	var step := 4 + int(roundf(float(wave) * 0.75))
-	var raw := float(base + paid * step + paid * paid * 2) * maxf(1.0, danger_price_mult)
+	var endless_mult := calc_endless_income_mult(wave)
+	var raw := float(base + paid * step + paid * paid * 2) * endless_mult * maxf(1.0, danger_price_mult)
 	return maxi(4, int(roundf(raw)))
 
 
@@ -150,6 +176,9 @@ static func calc_shop_sink_cost(
 	wave: int,
 	danger_price_mult: float = 1.0
 ) -> int:
-	var inflation := 1.0 + float(maxi(0, wave - 1)) * 0.08
+	var w := float(mini(9, maxi(0, wave - 1)))
+	var inflation := 1.0 + w * 0.14 + pow(w, 1.35) * 0.02
+	if wave > 10:
+		inflation *= pow(1.09, float(wave - 10))
 	var raw := (float(base_cost) + float(times_bought) * float(step_cost) + float(times_bought * times_bought) * 6.0) * inflation * maxf(1.0, danger_price_mult)
 	return maxi(10, int(roundf(raw)))

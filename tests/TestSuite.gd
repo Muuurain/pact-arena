@@ -29,6 +29,10 @@ func _run_all() -> void:
 	await _test_touch_scroll_container()
 	await _test_full_ui_and_combat_integration()
 
+	AudioManager.stop_all()
+	for _w in range(2):
+		await get_tree().process_frame
+
 	if _failures.is_empty():
 		print("\nALL TESTS PASSED (0 failures)")
 		get_tree().quit(0)
@@ -358,18 +362,28 @@ func _test_full_ui_and_combat_integration() -> void:
 	_assert(hp_b_d0 >= 25000.0 and hp_b_d5 >= 80000.0 and hp_b_d5 > hp_b_d0 * 2.8, "Wave 10 Boss Sovereign scales substantially across D0..D5")
 	run.danger_level = 0
 
+	run.items = ["itm_glass_ring", "itm_glass_ring", "itm_magnet_core"]
+	run.recompute_effective_stats()
 	inst.hud.bind_run(run, inst.arena.player)
 	_assert(inst.hud._synergy_box.get_child_count() >= 4, "BattleHud renders active faction & resonance pills")
 	inst.hud._toggle_pause()
 	_assert(inst.hud._pause_synergy_lbl.text.contains("攻速+14%") and inst.hud._pause_synergy_lbl.text.contains("虚空磁暴"), "Pause modal shows active synergy & resonance details")
+	_assert(inst.hud._pause_synergy_lbl.text.contains("碎玻璃指环 ×2"), "Pause modal displays purchased item stack records")
 	inst.hud._toggle_pause()
 
 	var asura_shop := RunState.new()
 	asura_shop.start_new_run("hero_one_arm_asura", "wpn_chainsaw", [])
 	asura_shop.add_crystals(500)
-	asura_shop.shop_offers = [{"kind": "weapon", "id": "wpn_chainsaw", "tier": 2, "price": 80, "locked": false, "sold": false}]
+	asura_shop.items = ["itm_glass_ring", "itm_glass_ring"]
+	asura_shop.recompute_effective_stats()
+	asura_shop.shop_offers = [
+		{"kind": "weapon", "id": "wpn_chainsaw", "tier": 2, "roll_wave": 1, "price": 80, "locked": false, "sold": false},
+		{"kind": "item", "id": "itm_glass_ring", "tier": 1, "roll_wave": 1, "price": 16, "locked": false, "sold": false},
+	]
 	inst._shop.open_for_run(asura_shop, false)
 	_assert(inst._shop.visible, "ShopScreen renders One-Arm Asura higher-tier replace offer cleanly")
+	_assert(inst._shop._items_toggle_btn.text.contains("2"), "ShopScreen items toggle button reflects owned count")
+	_assert(inst._shop._owned_items_box.get_child_count() == 1 and inst._shop._items_list_box.get_child_count() == 1, "ShopScreen renders owned item badge strip and inventory modal list")
 	inst._shop.visible = false
 
 	inst._awakening_modal.open_for_weapon(0, "wpn_chainsaw")
@@ -379,6 +393,7 @@ func _test_full_ui_and_combat_integration() -> void:
 	run.victory_reached = true
 	inst._summary.show_wave10_choice(run)
 	_assert(inst._summary.visible, "RunSummaryScreen Wave 10 choice opens cleanly")
+	_assert(inst._summary._body_lbl.text.contains("碎玻璃指环 ×2"), "RunSummaryScreen includes purchased item records")
 
 	SaveManager.clear_resume_run()
 	inst.queue_free()
@@ -387,9 +402,48 @@ func _test_full_ui_and_combat_integration() -> void:
 
 
 func _test_difficulty_and_economy_rebalance() -> void:
+	var inf_w1 := CombatFormulas.calc_wave_inflation(1)
+	var inf_w10 := CombatFormulas.calc_wave_inflation(10)
+	var inf_w12 := CombatFormulas.calc_wave_inflation(12)
+	var inf_w20 := CombatFormulas.calc_wave_inflation(20)
+	var inc_w10 := CombatFormulas.calc_endless_income_mult(10)
+	var inc_w20 := CombatFormulas.calc_endless_income_mult(20)
+	_assert(is_equal_approx(inf_w1, 1.0) and inf_w10 >= 4.4 and is_equal_approx(inf_w12, inf_w10 * pow(1.12, 2)), "Shop wave inflation scales cleanly through Wave 10 and anchors Endless at 1.12^(w-10)")
+	_assert(is_equal_approx(inc_w10, 1.0) and is_equal_approx(inc_w20, pow(1.09, 10)) and is_equal_approx(inf_w20, inf_w10 * pow(1.12, 10)), "Endless income (1.09^e) tracks Endless shop inflation (1.12^e) without hyperinflation collapse")
+	var w20_item_p := CombatFormulas.calc_shop_price(18, 1, 20, 0.0, false, 1.0, 0)
+	_assert(w20_item_p <= 280, "Wave 20 base item price stays within Endless per-wave earning capacity")
+
 	var p_w1 := CombatFormulas.calc_shop_price(30, 1, 1, 0.0, false, 1.0)
 	var p_w10_d5 := CombatFormulas.calc_shop_price(30, 1, 10, 0.0, false, 1.3)
-	_assert(p_w10_d5 > p_w1 * 2, "Wave 10 D5 shop prices scale significantly over Wave 1 D0")
+	_assert(p_w10_d5 > p_w1 * 5, "Wave 10 D5 shop prices scale strongly over Wave 1 D0")
+
+	var dup0 := CombatFormulas.calc_shop_price(20, 1, 5, 0.0, false, 1.0, 0)
+	var dup3 := CombatFormulas.calc_shop_price(20, 1, 5, 0.0, false, 1.0, 3)
+	_assert(is_equal_approx(CombatFormulas.calc_duplicate_item_mult(3), pow(1.5, 3)) and dup3 >= int(floorf(float(dup0) * 3.2)), "Duplicate item surcharge grows exponentially at 1.50^n")
+
+	var eco_run := RunState.new()
+	eco_run.start_new_run("hero_crimson_blade", "wpn_chainsaw", [], 0)
+	eco_run.wave = 5
+	var shelf_item := {"kind": "item", "id": "itm_glass_ring", "tier": 1, "roll_wave": 5, "locked": false, "sold": false}
+	var p_live_0 := ShopGenerator.calc_live_offer_price(eco_run, shelf_item)
+	eco_run.items.append("itm_glass_ring")
+	eco_run.items.append("itm_glass_ring")
+	eco_run.items.append("itm_magnet_core")
+	var p_live_2 := ShopGenerator.calc_live_offer_price(eco_run, shelf_item)
+	_assert(p_live_2 > p_live_0 * 2, "Live shelf price increases immediately when player already owns copies")
+
+	var locked_w2 := {"kind": "weapon", "id": "wpn_chainsaw", "tier": 1, "roll_wave": 2, "locked": true, "sold": false}
+	_assert(ShopGenerator.calc_live_offer_price(eco_run, locked_w2) < CombatFormulas.calc_shop_price(int(GameData.get_weapon("wpn_chainsaw")["price"]), 1, 5, 0.0, false, 1.0), "Locked offer preserves its roll_wave layaway price")
+
+	eco_run.add_or_merge_weapon("wpn_blade", 1, 5)
+	eco_run.wave = 10
+	var expected_w1_refund := maxi(5, int(roundf(float(CombatFormulas.calc_shop_price(int(GameData.get_weapon("wpn_chainsaw")["price"]), 1, 1, 0.0, false, 1.0)) * 0.6)))
+	_assert(eco_run.sell_weapon_slot(0) == expected_w1_refund, "Selling a Wave 1 weapon at Wave 10 uses buy_wave to prevent inflation arbitrage")
+
+	var sum := eco_run.get_item_counts_summary()
+	_assert(sum.size() == 2 and String(sum[0]["id"]) == "itm_glass_ring" and int(sum[0]["count"]) == 2 and eco_run.get_item_count("itm_glass_ring") == 2, "RunState aggregates purchased item counts accurately")
+	var mod_sum := RunState.format_item_mods_summary(sum[0]["def"], 2)
+	_assert(mod_sum.contains("+36") and mod_sum.contains("-12"), "RunState formats stacked cumulative item modifiers accurately")
 
 	var r0 := CombatFormulas.calc_reroll_cost(8, 0, 0, 1.0)
 	var r4 := CombatFormulas.calc_reroll_cost(8, 4, 0, 1.25)
@@ -422,10 +476,22 @@ func _test_difficulty_and_economy_rebalance() -> void:
 	var ember_d5 := sink_run.calc_ember_reward()
 	_assert(ember_d5 > ember_d0, "Higher Danger tiers award significantly more Abyss Embers")
 
+	# Verify Endless wave clear income, interest cap scaling, and monster crystal drop scaling
+	var endless_eco := RunState.new()
+	endless_eco.start_new_run("hero_crimson_blade", "wpn_chainsaw", ["pact_time_rush"], 0)
+	endless_eco.wave = 20
+	endless_eco.crystals = 5000
+	var w20_eco := endless_eco.complete_wave_economy()
+	_assert(int(w20_eco["interest"]) > 150 and int(w20_eco["harvest"]) > 150, "Endless Wave 20 scales both harvest and interest cap cleanly")
+
 	# Verify pending spawn telegraph and materialize flow
 	var em := EnemyManager.new()
 	get_tree().root.add_child(em)
 	await get_tree().process_frame
+	var w1_brute := em.spawn_enemy("brute", Vector2(360, 120), 1)
+	var w20_brute := em.spawn_enemy("brute", Vector2(360, -120), 20)
+	_assert(int(w20_brute["crystals"]) >= int(w1_brute["crystals"]) * 2, "Endless Wave 20 enemies drop proportionally more blood crystals")
+	em.clear_all()
 	em.queue_spawn_enemy("swarmer", Vector2(360, 0), 1, 0.35)
 	_assert(em.get_pending_count() == 1 and em.get_alive_count() == 0, "Queued enemy waits in summon telegraph before spawning")
 	em.step(0.20)

@@ -30,6 +30,10 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	stop_all()
+
+
+func stop_all() -> void:
 	_current_bgm = ""
 	if _bgm_player != null:
 		_bgm_player.stop()

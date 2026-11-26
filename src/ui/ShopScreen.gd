@@ -12,17 +12,25 @@ var _selected_slot: int = -1
 var _header_lbl: Label
 var _crystals_lbl: Label
 var _synergy_lbl: Label
+var _items_toggle_btn: Button
 var _stats_modal: Control
 var _stats_panel: PanelContainer
 var _stats_grid: GridContainer
 var _synergy_modal: Control
 var _synergy_panel: PanelContainer
 var _synergy_detail_box: VBoxContainer
+var _items_modal: Control
+var _items_panel: PanelContainer
+var _items_summary_lbl: Label
+var _items_list_box: VBoxContainer
 var _slots_grid: GridContainer
 var _slot_action_bar: PanelContainer
 var _slot_detail_lbl: Label
 var _merge_btn: Button
 var _sell_btn: Button
+var _owned_items_lbl: Label
+var _owned_items_scroll: TouchScrollContainer
+var _owned_items_box: HBoxContainer
 var _offers_grid: GridContainer
 var _sinks_box: VBoxContainer
 var _sink_feedback_lbl: Label
@@ -76,29 +84,51 @@ func _build_ui() -> void:
 	_crystals_lbl.add_theme_color_override("font_color", UiStyles.COL_GOLD)
 	top_h.add_child(_crystals_lbl)
 
+	var top_btn_h := HBoxContainer.new()
+	top_btn_h.add_theme_constant_override("separation", 8)
+	top_v.add_child(top_btn_h)
+
 	var syn_toggle := Button.new()
 	syn_toggle.text = "羁绊"
-	syn_toggle.custom_minimum_size = Vector2(90, 52)
-	UiStyles.style_button(syn_toggle, UiStyles.COL_VOID, false, 52.0)
+	syn_toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	syn_toggle.custom_minimum_size = Vector2(0, 48)
+	UiStyles.style_button(syn_toggle, UiStyles.COL_VOID, false, 48.0)
 	syn_toggle.pressed.connect(func():
 		_stats_modal.visible = false
+		_items_modal.visible = false
 		_synergy_modal.visible = true
 		UiStyles.animate_pop_in(_synergy_panel)
 		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
 	)
-	top_h.add_child(syn_toggle)
+	top_btn_h.add_child(syn_toggle)
 
 	var stats_toggle := Button.new()
 	stats_toggle.text = "属性"
-	stats_toggle.custom_minimum_size = Vector2(90, 52)
-	UiStyles.style_button(stats_toggle, UiStyles.COL_AZURE, false, 52.0)
+	stats_toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stats_toggle.custom_minimum_size = Vector2(0, 48)
+	UiStyles.style_button(stats_toggle, UiStyles.COL_AZURE, false, 48.0)
 	stats_toggle.pressed.connect(func():
 		_synergy_modal.visible = false
+		_items_modal.visible = false
 		_stats_modal.visible = true
 		UiStyles.animate_pop_in(_stats_panel)
 		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
 	)
-	top_h.add_child(stats_toggle)
+	top_btn_h.add_child(stats_toggle)
+
+	_items_toggle_btn = Button.new()
+	_items_toggle_btn.text = "已购道具 (0)"
+	_items_toggle_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_items_toggle_btn.custom_minimum_size = Vector2(0, 48)
+	UiStyles.style_button(_items_toggle_btn, UiStyles.COL_GOLD, false, 48.0)
+	_items_toggle_btn.pressed.connect(func():
+		_stats_modal.visible = false
+		_synergy_modal.visible = false
+		_items_modal.visible = true
+		UiStyles.animate_pop_in(_items_panel)
+		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
+	)
+	top_btn_h.add_child(_items_toggle_btn)
 
 	_synergy_lbl = Label.new()
 	_synergy_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -170,6 +200,44 @@ func _build_ui() -> void:
 	)
 	syn_body.add_child(syn_close)
 
+	# CENTERED OWNED ITEMS INVENTORY MODAL
+	var itm := UiStyles.make_centered_modal_shell(self, 640.0, UiStyles.COL_GOLD, 95)
+	_items_modal = itm["overlay"]
+	_items_panel = itm["panel"]
+	var it_body: VBoxContainer = itm["body"]
+
+	var it_title := Label.new()
+	it_title.text = "已购道具清单与累计加成"
+	it_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	it_title.add_theme_font_size_override("font_size", 24)
+	it_title.add_theme_color_override("font_color", UiStyles.COL_GOLD)
+	it_body.add_child(it_title)
+
+	_items_summary_lbl = Label.new()
+	_items_summary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_items_summary_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_items_summary_lbl.add_theme_font_size_override("font_size", 14)
+	_items_summary_lbl.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
+	it_body.add_child(_items_summary_lbl)
+
+	var it_scroll := TouchScrollContainer.new()
+	it_scroll.custom_minimum_size = Vector2(0, 480)
+	it_body.add_child(it_scroll)
+
+	_items_list_box = VBoxContainer.new()
+	_items_list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_items_list_box.add_theme_constant_override("separation", 8)
+	it_scroll.add_child(_items_list_box)
+
+	var it_close := Button.new()
+	it_close.text = "关闭清单"
+	UiStyles.style_button(it_close, UiStyles.COL_GOLD, true, 54.0)
+	it_close.pressed.connect(func():
+		EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
+		_items_modal.visible = false
+	)
+	it_body.add_child(it_close)
+
 	# SCROLLABLE MIDDLE: WEAPONS + OFFERS
 	var scroll := TouchScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -224,6 +292,25 @@ func _build_ui() -> void:
 	UiStyles.style_button(_sell_btn, UiStyles.COL_CRIMSON, false, 52.0)
 	_sell_btn.pressed.connect(_on_sell_pressed)
 	sab_h.add_child(_sell_btn)
+
+	_owned_items_lbl = Label.new()
+	_owned_items_lbl.text = "已购道具（0 件 · 购入后可随时查阅累计加成）"
+	_owned_items_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_owned_items_lbl.add_theme_font_size_override("font_size", 16)
+	_owned_items_lbl.add_theme_color_override("font_color", UiStyles.COL_GOLD)
+	mid_v.add_child(_owned_items_lbl)
+
+	_owned_items_scroll = TouchScrollContainer.new()
+	_owned_items_scroll.visible = false
+	_owned_items_scroll.custom_minimum_size = Vector2(0, 84)
+	_owned_items_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_owned_items_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_owned_items_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	mid_v.add_child(_owned_items_scroll)
+
+	_owned_items_box = HBoxContainer.new()
+	_owned_items_box.add_theme_constant_override("separation", 8)
+	_owned_items_scroll.add_child(_owned_items_box)
 
 	var s_title := Label.new()
 	s_title.text = "黑市货架（点图标看详情）"
@@ -282,6 +369,7 @@ func open_for_run(run: RunState, generate_new_stock: bool = true) -> void:
 	_selected_slot = -1
 	_stats_modal.visible = false
 	_synergy_modal.visible = false
+	_items_modal.visible = false
 	_slot_action_bar.visible = false
 	if _sink_feedback_lbl != null:
 		_sink_feedback_lbl.visible = false
@@ -394,6 +482,7 @@ func refresh_ui() -> void:
 
 		_slots_grid.add_child(slot_p)
 
+	_rebuild_owned_items()
 	_update_slot_action_bar()
 	_rebuild_offers()
 	_rebuild_sinks()
@@ -404,6 +493,160 @@ func refresh_ui() -> void:
 	_reroll_btn.text = "免费刷新" if r_cost == 0 else "刷新 ($%d)" % r_cost
 	_reroll_btn.disabled = (_run.crystals < r_cost)
 	_next_btn.text = "出战第 %d 波" % (_run.wave + 1)
+
+
+func _rebuild_owned_items() -> void:
+	if _owned_items_box == null or _items_list_box == null:
+		return
+	for c in _owned_items_box.get_children():
+		_owned_items_box.remove_child(c)
+		c.queue_free()
+	for c in _items_list_box.get_children():
+		_items_list_box.remove_child(c)
+		c.queue_free()
+
+	var summary: Array[Dictionary] = _run.get_item_counts_summary()
+	var total_cnt := _run.items.size()
+	if _items_toggle_btn != null:
+		_items_toggle_btn.text = "已购道具 (%d)" % total_cnt
+
+	if summary.is_empty():
+		_owned_items_lbl.text = "已购道具（0 件 · 购入后可随时查阅累计加成）"
+		_owned_items_scroll.visible = false
+		_items_summary_lbl.text = "本局暂未获得被动道具；每重复买同款 1 次，该道具售价都会升至 1.5 倍。"
+		var empty_l := Label.new()
+		empty_l.text = "暂未购入任何被动道具。\n在黑市购入道具或开启「黑市遗物盲盒」后，会自动汇总数量与累计加成。"
+		empty_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		empty_l.add_theme_font_size_override("font_size", 16)
+		empty_l.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
+		_items_list_box.add_child(empty_l)
+		return
+
+	_owned_items_lbl.text = "已购道具（共 %d 件 · %d 种，点图标看累计与同款涨价）" % [total_cnt, summary.size()]
+	_owned_items_scroll.visible = true
+	_items_summary_lbl.text = "本局累计持有 %d 件被动道具（%d 种）· 同款再购按 1.50^n 涨价" % [total_cnt, summary.size()]
+
+	for entry in summary:
+		var idef: Dictionary = entry["def"]
+		var cnt := int(entry["count"])
+		var tier := int(idef.get("tier", 1))
+		var tcol := UiStyles.tier_color(tier)
+		var it_copy := idef.duplicate(true)
+
+		# Horizontal badge tile below weapons
+		var tile := PanelContainer.new()
+		tile.custom_minimum_size = Vector2(74, 78)
+		var tst := UiStyles.make_panel_style(UiStyles.COL_CARD, tcol, 12, 2)
+		tst.shadow_size = 0
+		tst.content_margin_left = 4
+		tst.content_margin_right = 4
+		tst.content_margin_top = 4
+		tst.content_margin_bottom = 4
+		tile.add_theme_stylebox_override("panel", tst)
+
+		var tv := VBoxContainer.new()
+		tv.alignment = BoxContainer.ALIGNMENT_CENTER
+		tv.add_theme_constant_override("separation", 1)
+		tv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		tile.add_child(tv)
+
+		var t_icon := TextureRect.new()
+		t_icon.texture = load(String(idef.get("sprite", "")))
+		t_icon.custom_minimum_size = Vector2(46, 46)
+		t_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		t_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		t_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		tv.add_child(t_icon)
+
+		var t_cnt := Label.new()
+		t_cnt.text = "×%d" % cnt
+		t_cnt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		t_cnt.add_theme_font_size_override("font_size", 13)
+		t_cnt.add_theme_color_override("font_color", UiStyles.COL_GOLD if cnt > 1 else Color.WHITE)
+		t_cnt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		tv.add_child(t_cnt)
+
+		var t_btn := Button.new()
+		t_btn.flat = true
+		t_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		t_btn.pressed.connect(func():
+			EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
+			_show_owned_item_detail(it_copy, cnt)
+		)
+		tile.add_child(t_btn)
+		_owned_items_box.add_child(tile)
+
+		# Full row card in centered modal
+		var row_card := PanelContainer.new()
+		row_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var rst := UiStyles.make_panel_style(Color(0.09, 0.07, 0.16, 0.94), tcol, 14, 2)
+		rst.shadow_size = 0
+		row_card.add_theme_stylebox_override("panel", rst)
+
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 10)
+		hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row_card.add_child(hb)
+
+		var r_icon := TextureRect.new()
+		r_icon.texture = load(String(idef.get("sprite", "")))
+		r_icon.custom_minimum_size = Vector2(64, 64)
+		r_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		r_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		r_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hb.add_child(r_icon)
+
+		var r_v := VBoxContainer.new()
+		r_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		r_v.add_theme_constant_override("separation", 3)
+		r_v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hb.add_child(r_v)
+
+		var r_name := Label.new()
+		r_name.text = "%s  ×%d  (%s)" % [String(idef["name"]), cnt, UiStyles.tier_name(tier)]
+		r_name.add_theme_font_size_override("font_size", 17)
+		r_name.add_theme_color_override("font_color", tcol)
+		r_v.add_child(r_name)
+
+		var r_cum := Label.new()
+		r_cum.text = "累计效果：%s" % RunState.format_item_mods_summary(idef, cnt)
+		r_cum.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		r_cum.add_theme_font_size_override("font_size", 14)
+		r_cum.add_theme_color_override("font_color", UiStyles.COL_EMERALD)
+		r_v.add_child(r_cum)
+
+		var dup_next := CombatFormulas.calc_duplicate_item_mult(cnt)
+		var r_dup := Label.new()
+		r_dup.text = "单件：%s  |  再买同款 ×%.2f" % [String(idef["desc"]), dup_next]
+		r_dup.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		r_dup.add_theme_font_size_override("font_size", 13)
+		r_dup.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
+		r_v.add_child(r_dup)
+
+		var r_btn := Button.new()
+		r_btn.flat = true
+		r_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		r_btn.pressed.connect(func():
+			EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
+			_show_owned_item_detail(it_copy, cnt)
+		)
+		row_card.add_child(r_btn)
+		_items_list_box.add_child(row_card)
+
+
+func _show_owned_item_detail(idef: Dictionary, cnt: int) -> void:
+	var tier := int(idef.get("tier", 1))
+	var dup_next := CombatFormulas.calc_duplicate_item_mult(cnt)
+	UiStyles.show_detail_modal(self, {
+		"title": "%s  ×%d" % [String(idef.get("name", "")), cnt],
+		"subtitle": "%s品质 · 本局已持有 %d 件" % [UiStyles.tier_name(tier), cnt],
+		"body": "单件效果：\n%s\n\n当前 %d 件累计加成：\n%s\n\n同款叠购涨价：再买第 %d 件同款时，售价将乘以 ×%.2f。" % [
+			String(idef.get("desc", "")), cnt, RunState.format_item_mods_summary(idef, cnt), cnt + 1, dup_next
+		],
+		"accent": UiStyles.tier_color(tier),
+		"icon_path": String(idef.get("sprite", "")),
+	})
 
 
 func _update_slot_action_bar() -> void:
@@ -420,7 +663,8 @@ func _update_slot_action_bar() -> void:
 	_merge_btn.visible = (dup >= 0)
 	_sell_btn.disabled = (_run.weapons.size() <= 1)
 	var danger_price := float(GameData.get_difficulty(_run.danger_level).get("shop_price_mult", 1.0))
-	var price := CombatFormulas.calc_shop_price(int(wdef.get("price", 18)), tier, _run.wave, 0.0, false, danger_price)
+	var buy_w := maxi(1, int(w.get("buy_wave", 1)))
+	var price := CombatFormulas.calc_shop_price(int(wdef.get("price", 18)), tier, buy_w, 0.0, false, danger_price)
 	var refund := maxi(5, int(roundf(float(price) * 0.6)))
 	_sell_btn.text = "出售 (+%d)" % refund
 
@@ -486,7 +730,8 @@ func _rebuild_offers() -> void:
 		var is_w := String(offer["kind"]) == "weapon"
 		var tier := int(offer.get("tier", 1))
 		var tcol := UiStyles.tier_color(tier)
-		var price := int(offer["price"])
+		var price := ShopGenerator.calc_live_offer_price(_run, offer)
+		offer["price"] = price
 		var locked := bool(offer.get("locked", false))
 		var can_merge := false
 		var can_replace := false
@@ -588,7 +833,10 @@ func _rebuild_offers() -> void:
 			)
 		else:
 			var idef := GameData.get_item(String(offer["id"]))
-			card.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, tcol, 16, 2))
+			var owned_cnt := _run.get_item_count(String(offer["id"]))
+			var dup_mult := CombatFormulas.calc_duplicate_item_mult(owned_cnt)
+			var card_col := Color(1.0, 0.72, 0.25) if owned_cnt > 0 else tcol
+			card.add_theme_stylebox_override("panel", UiStyles.make_panel_style(UiStyles.COL_CARD, card_col, 16, 2))
 			var info_btn := Button.new()
 			info_btn.flat = true
 			info_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -628,9 +876,13 @@ func _rebuild_offers() -> void:
 			tv.add_child(nl)
 
 			var tag_l := Label.new()
-			tag_l.text = "被动 · %s (点看›)" % UiStyles.tier_name(tier)
+			if owned_cnt > 0:
+				tag_l.text = "已持×%d · 同款×%.2f (点看›)" % [owned_cnt, dup_mult]
+				tag_l.add_theme_color_override("font_color", Color(1.0, 0.76, 0.30))
+			else:
+				tag_l.text = "被动 · %s (点看›)" % UiStyles.tier_name(tier)
+				tag_l.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
 			tag_l.add_theme_font_size_override("font_size", 13)
-			tag_l.add_theme_color_override("font_color", UiStyles.COL_TEXT_DIM)
 			tv.add_child(tag_l)
 
 			var dl := Label.new()
@@ -642,13 +894,23 @@ func _rebuild_offers() -> void:
 
 			var it_copy := (idef as Dictionary).duplicate(true)
 			var pr_val := price
+			var owned_val := owned_cnt
+			var dup_val := dup_mult
 			info_btn.pressed.connect(func():
 				EventBus.sfx_requested.emit("sfx_ui_click", 0.0)
+				var extra := ""
+				if owned_val > 0:
+					var next_dup := CombatFormulas.calc_duplicate_item_mult(owned_val + 1)
+					extra = "\n\n已持有 ×%d（累计：%s）\n含同款累购 ×%.2f，买下此件后下件同款将升至 ×%.2f。" % [
+						owned_val, RunState.format_item_mods_summary(it_copy, owned_val), dup_val, next_dup
+					]
+				else:
+					extra = "\n\n同款叠购规则：每多买 1 件同款道具，黑市售价按 1.50 倍递增。"
 				UiStyles.show_detail_modal(self, {
 					"title": String(it_copy["name"]),
-					"subtitle": "%s品质 · 本波售价 %d 血晶" % [UiStyles.tier_name(tier), pr_val],
-					"body": "道具效果：\n%s\n\n同类被动道具可无限叠加，永久增强本局人物属性。" % String(it_copy["desc"]),
-					"accent": tcol,
+					"subtitle": "%s品质 · 当前售价 %d 血晶" % [UiStyles.tier_name(tier), pr_val],
+					"body": "道具效果：\n%s%s" % [String(it_copy["desc"]), extra],
+					"accent": card_col,
 					"icon_path": String(it_copy.get("sprite", "")),
 				})
 			)
@@ -692,13 +954,15 @@ func _sync_locked_offers() -> void:
 
 func _buy_offer(idx: int) -> void:
 	var offer: Dictionary = _run.shop_offers[idx]
-	var price := int(offer["price"])
+	var price := ShopGenerator.calc_live_offer_price(_run, offer)
+	offer["price"] = price
 	if _run.crystals < price or bool(offer.get("sold", false)):
 		return
 
 	var awakened_slot := -1
 	if String(offer["kind"]) == "weapon":
-		var res := _run.add_or_merge_weapon(String(offer["id"]), int(offer["tier"]))
+		var buy_w := maxi(1, int(offer.get("roll_wave", _run.wave)))
+		var res := _run.add_or_merge_weapon(String(offer["id"]), int(offer["tier"]), buy_w)
 		if not bool(res["success"]):
 			return
 		awakened_slot = int(res["awakened_slot"])

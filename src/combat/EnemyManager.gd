@@ -203,7 +203,14 @@ func spawn_enemy(enemy_id: String, world_pos: Vector2, wave: int, is_mini: bool 
 	var base_crystals := int(edef["crystals"])
 	if enemy_id == "swarmer" and wave >= 4:
 		base_crystals = 1
-	slot["crystals"] = maxi(1, int(roundf(float(base_crystals) * (0.5 if is_mini else 1.0))))
+	var endless_drop := CombatFormulas.calc_endless_income_mult(wave)
+	var raw_crystals := float(base_crystals) * endless_drop * (0.5 if is_mini else 1.0)
+	var final_crystals := maxi(1, int(roundf(raw_crystals)))
+	if wave > 10:
+		var whole := int(floorf(raw_crystals))
+		var frac := raw_crystals - float(whole)
+		final_crystals = maxi(1, whole + (1 if randf() < frac else 0))
+	slot["crystals"] = final_crystals
 	slot["is_boss"] = is_boss
 	slot["is_elite"] = enemy_id == "elite_warden"
 	slot["is_mini"] = is_mini

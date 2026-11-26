@@ -81,7 +81,7 @@ func start_new_run(p_hero_id: String, starting_weapon_id: String, heats_list: Ar
 	max_weapons = int(hdef.get("max_weapons", 6))
 
 	var w_id := starting_weapon_id if not starting_weapon_id.is_empty() else String(hdef.get("default_weapon", "wpn_chainsaw"))
-	weapons.append({"id": w_id, "tier": 1, "awakening": ""})
+	weapons.append({"id": w_id, "tier": 1, "awakening": "", "buy_wave": 1})
 
 	crystals = 18 + int(roundf(SaveManager.get_talent_value("tal_start_gold")))
 	max_crystals_held = crystals
@@ -211,25 +211,27 @@ func can_add_or_merge_weapon(weapon_id: String, tier: int) -> Dictionary:
 	return {"ok": false, "mode": "full", "merge_idx": -1}
 
 
-func add_or_merge_weapon(weapon_id: String, tier: int) -> Dictionary:
+func add_or_merge_weapon(weapon_id: String, tier: int, buy_wave: int = -1) -> Dictionary:
 	var chk := can_add_or_merge_weapon(weapon_id, tier)
 	if not bool(chk["ok"]):
 		return {"success": false, "awakened_slot": -1}
+	var rec_wave := buy_wave if buy_wave > 0 else wave
 	var awakened_slot := -1
 	var mode := String(chk["mode"])
 	if mode == "merge":
 		var idx := int(chk["merge_idx"])
 		var new_tier := mini(4, int(weapons[idx]["tier"]) + 1)
 		weapons[idx]["tier"] = new_tier
+		weapons[idx]["buy_wave"] = rec_wave
 		if new_tier == 4 and String(weapons[idx].get("awakening", "")).is_empty():
 			awakened_slot = idx
 	elif mode == "replace":
 		var idx := int(chk["merge_idx"])
-		weapons[idx] = {"id": weapon_id, "tier": tier, "awakening": ""}
+		weapons[idx] = {"id": weapon_id, "tier": tier, "awakening": "", "buy_wave": rec_wave}
 		if tier == 4:
 			awakened_slot = idx
 	else:
-		weapons.append({"id": weapon_id, "tier": tier, "awakening": ""})
+		weapons.append({"id": weapon_id, "tier": tier, "awakening": "", "buy_wave": rec_wave})
 		if tier == 4:
 			awakened_slot = weapons.size() - 1
 	recompute_effective_stats()
@@ -261,13 +263,50 @@ func sell_weapon_slot(idx: int) -> int:
 		return 0
 	var w: Dictionary = weapons[idx]
 	var wdef := GameData.get_weapon(String(w["id"]))
-	var price := CombatFormulas.calc_shop_price(int(wdef.get("price", 18)), int(w["tier"]), wave, 0.0, false)
+	var buy_wave := int(w.get("buy_wave", 1))
+	var price := CombatFormulas.calc_shop_price(int(wdef.get("price", 18)), int(w["tier"]), buy_wave, 0.0, false)
 	var refund := maxi(5, int(roundf(float(price) * 0.6)))
 	weapons.remove_at(idx)
 	add_crystals(refund)
 	recompute_effective_stats()
 	EventBus.run_state_updated.emit()
 	return refund
+
+
+func get_item_count(item_id: String) -> int:
+	var cnt := 0
+	for it in items:
+		if it == item_id:
+			cnt += 1
+	return cnt
+
+
+func get_item_counts_summary() -> Array[Dictionary]:
+	var counts: Dictionary = {}
+	var order: Array[String] = []
+	for it in items:
+		if not counts.has(it):
+			counts[it] = 1
+			order.append(it)
+		else:
+			counts[it] = int(counts[it]) + 1
+	var out: Array[Dictionary] = []
+	for it in order:
+		out.append({
+			"id": it,
+			"count": int(counts[it]),
+			"def": GameData.get_item(it),
+		})
+	return out
+
+
+static func format_item_mods_summary(idef: Dictionary, count: int = 1) -> String:
+	var mods: Dictionary = idef.get("mods", {})
+	var parts: Array[String] = []
+	for k in StatBlock.STAT_KEYS:
+		if mods.has(k):
+			parts.append(StatBlock.format_stat_delta(k, float(mods[k]) * float(count)))
+	return " · ".join(parts) if not parts.is_empty() else String(idef.get("desc", ""))
 
 
 func apply_blood_pact(pact_id: String) -> Dictionary:
@@ -349,7 +388,8 @@ func buy_shop_sink(sink_id: String) -> Dictionary:
 
 
 func complete_wave_economy() -> Dictionary:
-	var base_harvest := int(roundf(stats.get_stat("harvesting") * 0.65 + float(wave * 4)))
+	var endless_mult := CombatFormulas.calc_endless_income_mult(wave)
+	var base_harvest := int(roundf((stats.get_stat("harvesting") * 0.65 + float(wave * 4)) * endless_mult))
 	var interest_rate := 0.04 + SaveManager.get_talent_value("tal_interest") / 100.0
 	if hero_id == "hero_gilded_pactkeeper":
 		interest_rate += 0.08
@@ -358,7 +398,8 @@ func complete_wave_economy() -> Dictionary:
 	if pacts.has("pact_time_rush"):
 		interest_rate += 0.15
 
-	var interest := mini(75, int(floorf(float(crystals) * interest_rate)))
+	var interest_cap := int(roundf(75.0 * endless_mult))
+	var interest := mini(interest_cap, int(floorf(float(crystals) * interest_rate)))
 	add_crystals(base_harvest + interest)
 
 	if pacts.has("pact_undying_sacrifice"):

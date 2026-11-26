@@ -5,6 +5,21 @@ All notable changes to **Pact Arena (血契竞技场)** will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-11-27
+
+### Balanced
+- **无尽模式“等弹性收支平衡”重构（参考 Brotato 无尽 / Risk of Rain 2 经济曲线）**：
+  - 修复此前无尽第 11+ 波物价按 `1.22^(wave-10)` 单边指数暴涨、而怪物掉晶与利息上限锁死导致第 15 波后完全买不起装备的问题。
+  - 在 [CombatFormulas.gd](src/core/CombatFormulas.gd) 新增 `calc_endless_income_mult(wave)`（第 10 波及以前保持 `1.0x`，无尽第 11+ 波起按 **`1.09^(wave-10)`** 增长），同步作用于怪物击杀血晶掉落（含对小怪整数截断采用随机小数四舍五入保真，[EnemyManager.gd](src/combat/EnemyManager.gd)）、宝箱固定血晶加成（[PickupManager.gd](src/combat/PickupManager.gd)）、波间收获加成与利息封顶上限（[RunState.gd](src/core/RunState.gd) `75 * 1.09^(wave-10)`）。
+  - 将无尽模式黑市波次通胀调优为 **`1.12^(wave-10)`**、黑市熔炉调优为 **`1.09^(wave-10)`**、刷新费用随 `calc_endless_income_mult` 同步上浮，保持“每波仅比上波温和收紧约 `2.75%` 实际购买力”，即使打到第 20~30 波，每波结束后仍能稳定购入 1~2 件关键提升对抗高强怪潮。
+
+## [2.4.0] - 2026-11-26
+
+### Changed & Added
+- **中后期黑市物价递进通胀**：升级 [CombatFormulas.gd](src/core/CombatFormulas.gd) `calc_wave_inflation()` 为混合线性幂次曲线（`1.0 + 0.24*w + 0.038*w^1.65`，第 10 波约 `4.59×`，无尽第 11+ 波叠乘 `1.22^(wave-10)`），同步强化三大黑市淬炼熔炉（`calc_shop_sink_cost()`）随波次递进消耗；新增商品 `roll_wave` 与武器 `buy_wave`（[ShopGenerator.gd](src/core/ShopGenerator.gd) / [RunState.gd](src/core/RunState.gd)），锁定保留享受当波原价且杜绝低买高卖套利。
+- **同款被动道具指数级累购加价**：重复购买同种被动道具新增 `calc_duplicate_item_mult()`（`1.50^已持有数`，最高计至 16 层），通过 `ShopGenerator.calc_live_offer_price()` 在刷出时及购买后实时刷新货架其余同款价格，防止单件高收益道具无限囤积引发属性指数膨胀（武器保留同款合成升阶路线免税）。
+- **全局已购道具清单与累计加成追踪**：在 [RunState.gd](src/core/RunState.gd) 新增 `get_item_count()`、`get_item_counts_summary()` 与 `format_item_mods_summary()`；在商店 [ShopScreen.gd](src/ui/ShopScreen.gd) 新增顶部 **「已购道具」** 居中弹窗与武器栏下方横向徽章条（点击可看单件/累计加成及下件同款倍率），并在战斗暂停界面（[BattleHud.gd](src/ui/BattleHud.gd)）与结算报告（[RunSummaryScreen.gd](src/ui/RunSummaryScreen.gd)）完整展示已购道具清单。
+
 ## [2.3.0] - 2026-11-25
 
 ### Improved & Polished

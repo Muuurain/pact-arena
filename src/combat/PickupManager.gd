@@ -130,6 +130,7 @@ func _collect(d: Dictionary, player: PlayerController, run: RunState) -> void:
 			EventBus.sfx_requested.emit("sfx_pickup_heal", 0.06)
 		"chest":
 			run.pending_chests += 1
-			run.add_crystals(22)
+			var chest_crystals := int(roundf(22.0 * CombatFormulas.calc_endless_income_mult(run.wave)))
+			run.add_crystals(chest_crystals)
 			EventBus.sfx_requested.emit("sfx_pickup_chest", 0.0)
 			EventBus.floating_text_requested.emit(player.global_position, "宝箱 +1!", Color(1.0, 0.85, 0.25), 1.15)

@@ -4,20 +4,35 @@ extends RefCounted
 ## respecting Luck, Ban list, Heat inflation, and locked offers.
 
 
-static func generate_shop_offers(run: RunState) -> Array[Dictionary]:
-	var offers: Array[Dictionary] = []
-	for lk in run.locked_shop_offers:
-		var copy := (lk as Dictionary).duplicate(true)
-		copy["locked"] = true
-		offers.append(copy)
-
-	var bans := SaveManager.get_ban_list()
+static func calc_live_offer_price(run: RunState, offer: Dictionary) -> int:
 	var discount := SaveManager.get_talent_value("tal_shop_discount")
 	if run.pacts.has("pact_bounty_hunt"):
 		discount += 35.0
 	var heat_inf := run.active_heats.has("heat_inflation")
 	var diff := GameData.get_difficulty(run.danger_level)
 	var danger_price := float(diff.get("shop_price_mult", 1.0))
+	var offer_wave := int(offer.get("roll_wave", run.wave))
+	if String(offer.get("kind", "")) == "weapon":
+		var wdef := GameData.get_weapon(String(offer["id"]))
+		var tier := int(offer.get("tier", 1))
+		return CombatFormulas.calc_shop_price(int(wdef.get("price", 18)), tier, offer_wave, discount, heat_inf, danger_price, 0)
+	var idef := GameData.get_item(String(offer["id"]))
+	var iid := String(offer["id"])
+	var owned := run.get_item_count(iid)
+	return CombatFormulas.calc_shop_price(int(idef.get("price", 18)), 1, offer_wave, discount, heat_inf, danger_price, owned)
+
+
+static func generate_shop_offers(run: RunState) -> Array[Dictionary]:
+	var offers: Array[Dictionary] = []
+	for lk in run.locked_shop_offers:
+		var copy := (lk as Dictionary).duplicate(true)
+		copy["locked"] = true
+		if not copy.has("roll_wave"):
+			copy["roll_wave"] = run.wave
+		copy["price"] = calc_live_offer_price(run, copy)
+		offers.append(copy)
+
+	var bans := SaveManager.get_ban_list()
 	var luck := run.stats.get_stat("luck")
 
 	var valid_weapons: Array[Dictionary] = []
@@ -39,25 +54,27 @@ static func generate_shop_offers(run: RunState) -> Array[Dictionary]:
 		if is_weapon:
 			var w: Dictionary = valid_weapons[randi() % valid_weapons.size()]
 			var tier := _roll_tier(run.wave, luck, run.pacts.has("pact_bounty_hunt"))
-			var price := CombatFormulas.calc_shop_price(int(w["price"]), tier, run.wave, discount, heat_inf, danger_price)
-			offers.append({
+			var entry := {
 				"kind": "weapon",
 				"id": String(w["id"]),
 				"tier": tier,
-				"price": price,
+				"roll_wave": run.wave,
 				"locked": false,
-			})
+			}
+			entry["price"] = calc_live_offer_price(run, entry)
+			offers.append(entry)
 		else:
 			var it: Dictionary = valid_items[randi() % valid_items.size()]
 			var tier := int(it.get("tier", 1))
-			var price := CombatFormulas.calc_shop_price(int(it["price"]), 1, run.wave, discount, heat_inf, danger_price)
-			offers.append({
+			var entry := {
 				"kind": "item",
 				"id": String(it["id"]),
 				"tier": tier,
-				"price": price,
+				"roll_wave": run.wave,
 				"locked": false,
-			})
+			}
+			entry["price"] = calc_live_offer_price(run, entry)
+			offers.append(entry)
 
 	return offers
 
