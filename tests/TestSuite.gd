@@ -30,6 +30,7 @@ func _run_all() -> void:
 	await _test_full_ui_and_combat_integration()
 
 	AudioManager.stop_all()
+	await get_tree().create_timer(0.12).timeout
 	for _w in range(2):
 		await get_tree().process_frame
 
@@ -58,6 +59,12 @@ func _test_catalog_completeness() -> void:
 	_assert(GameData.shop_sinks.size() == 3, "3 Shop crystal sinks loaded")
 	for sk in GameData.shop_sinks:
 		_assert(ResourceLoader.exists(String(sk.get("sprite", ""))), "Shop sink sprite exists: %s" % sk.get("sprite", ""))
+	for idx in range(6):
+		var sp_path := "res://assets/art/sprites/projectiles/slash_frames/slash_f%d.png" % idx
+		_assert(ResourceLoader.exists(sp_path), "Animated slash frame exists: %s" % sp_path)
+	for ic_name in ["launcher_512.png", "launcher_192.png", "launcher_adaptive_fg.png", "launcher_adaptive_bg.png"]:
+		var ic_path := "res://assets/art/ui/%s" % ic_name
+		_assert(ResourceLoader.exists(ic_path), "App launcher icon asset exists: %s" % ic_path)
 
 	var sfx_dir := DirAccess.open("res://assets/audio/sfx")
 	var sfx_oggs: Array[String] = []
@@ -394,6 +401,23 @@ func _test_full_ui_and_combat_integration() -> void:
 	inst._summary.show_wave10_choice(run)
 	_assert(inst._summary.visible, "RunSummaryScreen Wave 10 choice opens cleanly")
 	_assert(inst._summary._body_lbl.text.contains("碎玻璃指环 ×2"), "RunSummaryScreen includes purchased item records")
+
+	# Verify Pause -> Exit to Main Menu stops combat loop, clears arena & restores sanctuary BGM
+	inst._start_fresh_run("hero_crimson_blade", "wpn_chainsaw", [])
+	inst.arena.vfx_mgr.spawn_slash_arc(Vector2.ZERO, 0.0, 120.0, Color(0.98, 0.28, 0.42), true, false, false)
+	_assert(inst.arena.vfx_mgr._transient_root.get_child_count() >= 2, "VfxManager spawns layered counter-phased animated 360 slash VFX")
+	for _s in range(6):
+		inst.arena._process(0.15)
+	_assert(inst.arena._wave_active and (inst.arena.enemy_mgr.get_alive_count() + inst.arena.enemy_mgr.get_pending_count() >= 1), "Arena actively runs combat before pause exit")
+	inst.hud._toggle_pause()
+	inst.hud.pause_exit_requested.emit()
+	inst.hud._pause_modal.visible = false
+	for _s in range(5):
+		inst.arena._process(0.2)
+		await get_tree().process_frame
+	_assert(not get_tree().paused and not inst.arena._wave_active, "Returning to main menu unpauses tree and stops arena wave loop")
+	_assert(inst.arena.enemy_mgr.get_alive_count() == 0 and inst.arena.enemy_mgr.get_pending_count() == 0 and inst.arena.vfx_mgr._transient_root.get_child_count() == 0, "Returning to main menu clears all active/pending enemies and slash VFX")
+	_assert(inst._menu.visible and not inst.hud.visible and AudioManager._current_bgm == "bgm_sanctuary", "Returning to main menu restores menu screen and sanctuary BGM")
 
 	SaveManager.clear_resume_run()
 	inst.queue_free()

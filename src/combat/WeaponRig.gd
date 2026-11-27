@@ -25,7 +25,7 @@ func setup(run: RunState, player: PlayerController, enemy_mgr: EnemyManager, pro
 	rebuild_weapons()
 
 
-func rebuild_weapons() -> void:
+func clear_all() -> void:
 	for sn in _slot_nodes:
 		if is_instance_valid(sn["sprite"]):
 			(sn["sprite"] as Node).queue_free()
@@ -33,6 +33,10 @@ func rebuild_weapons() -> void:
 			(sn["aura"] as Node).queue_free()
 	_slot_nodes.clear()
 	clear_turrets()
+
+
+func rebuild_weapons() -> void:
+	clear_all()
 
 	if _run == null:
 		return
@@ -221,7 +225,8 @@ func _fire_weapon(
 		"arc_sweep", "heavy_cleave", "rapid_stab":
 			var is_360 := (awk == "awk_chainsaw_spin")
 			var arc_col := Color(0.28, 0.85, 1.0) if faction == "azure" else Color(0.98, 0.28, 0.42)
-			_vfx.spawn_slash_arc(anchor, aim_dir.angle(), eff_range * 0.78, arc_col, is_360)
+			var flip_swing := float(sn["swing_sign"]) < 0.0
+			_vfx.spawn_slash_arc(anchor, aim_dir.angle(), eff_range * 0.82, arc_col, is_360, flip_swing, pattern == "heavy_cleave")
 			var hits := _enemy_mgr.query_radius(anchor, eff_range)
 			for e in hits:
 				var to_e := Vector2(e["pos"]) - anchor

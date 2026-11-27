@@ -326,10 +326,132 @@ def build_items_and_sinks():
         ], ART / "sprites" / "items", 128, pad_ratio=0.06, bridge_leaks=False)
 
 
+def make_aa_rounded_mask(size: int, radius: int, ss: int = 4) -> Image.Image:
+    big = Image.new("L", (size * ss, size * ss), 0)
+    d = ImageDraw.Draw(big)
+    d.rounded_rectangle((0, 0, size * ss - 1, size * ss - 1), radius=radius * ss, fill=255)
+    return big.resize((size, size), Image.Resampling.LANCZOS)
+
+
+def build_app_icon():
+    """Generates anti-aliased desktop/Android/adaptive icons from Option A (Crimson Shadow Emblem)."""
+    src = find_exact_or_latest("crimson_shadow_emblem_icon_v2")
+    if not src:
+        src = find_exact_or_latest("launcher_icon")
+    if not src:
+        raise FileNotFoundError("Could not find Option A icon source in BRAIN_DIR")
+
+    im = Image.open(src).convert("RGBA")
+    ui_dir = ART / "ui"
+    ui_dir.mkdir(parents=True, exist_ok=True)
+
+    # Smooth AA rounded-square 512x512 (MainMenu crest & Windows window/taskbar icon)
+    sq512 = im.resize((512, 512), Image.Resampling.LANCZOS)
+    out512 = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
+    out512.paste(sq512, (0, 0), make_aa_rounded_mask(512, 102))
+    out512.save(ui_dir / "launcher_512.png")
+
+    # Smooth AA rounded-square 192x192 (Android legacy main launcher icon)
+    sq192 = im.resize((192, 192), Image.Resampling.LANCZOS)
+    out192 = Image.new("RGBA", (192, 192), (0, 0, 0, 0))
+    out192.paste(sq192, (0, 0), make_aa_rounded_mask(192, 38))
+    out192.save(ui_dir / "launcher_192.png")
+
+    # Android Adaptive Background (432x432 matching dark burgundy-obsidian vignette)
+    yy, xx = np.mgrid[0:432, 0:432].astype(np.float32)
+    rr = np.sqrt(((xx - 215.5) / 216.0) ** 2 + ((yy - 215.5) / 216.0) ** 2)
+    t_bg = np.clip(rr / 1.15, 0.0, 1.0)
+    bg_arr = np.zeros((432, 432, 4), dtype=np.uint8)
+    c_in = np.array([34.0, 5.0, 11.0], dtype=np.float32)
+    c_out = np.array([8.0, 3.0, 6.0], dtype=np.float32)
+    bg_rgb = c_in[None, None, :] * (1.0 - t_bg[..., None]) + c_out[None, None, :] * t_bg[..., None]
+    bg_arr[..., :3] = np.clip(bg_rgb, 0, 255).astype(np.uint8)
+    bg_arr[..., 3] = 255
+    Image.fromarray(bg_arr, "RGBA").save(ui_dir / "launcher_adaptive_bg.png")
+
+    # Android Adaptive Foreground (432x432 safe-zone scaled with seamless radial feather)
+    fg_size = 336
+    fg_core = np.array(im.resize((fg_size, fg_size), Image.Resampling.LANCZOS), dtype=np.float32)
+    fy, fx = np.mgrid[0:fg_size, 0:fg_size].astype(np.float32)
+    fr = np.sqrt(((fx - (fg_size - 1) * 0.5) / (fg_size * 0.5)) ** 2 + ((fy - (fg_size - 1) * 0.5) / (fg_size * 0.5)) ** 2)
+    fg_alpha = np.clip((0.98 - fr) / 0.24, 0.0, 1.0)
+    fg_core[..., 3] = fg_alpha * 255.0
+    fg_canvas = Image.new("RGBA", (432, 432), (0, 0, 0, 0))
+    fg_patch = Image.fromarray(fg_core.astype(np.uint8), "RGBA")
+    off = (432 - fg_size) // 2
+    fg_canvas.paste(fg_patch, (off, off), fg_patch)
+    fg_canvas.save(ui_dir / "launcher_adaptive_fg.png")
+
+    print("Saved launcher_512.png, launcher_192.png, launcher_adaptive_bg.png, launcher_adaptive_fg.png")
+
+
+def build_slash_vfx():
+    """Slices the 3x2 Nano Banana slash animation sheet into 6 aligned RGBA frames
+    using smooth luminance alpha extraction (zero dark halos/interior pockets)."""
+    ss = find_exact_or_latest("melee_slash_spritesheet")
+    if not ss:
+        raise FileNotFoundError("Could not find melee_slash_spritesheet in BRAIN_DIR")
+
+    im = Image.open(ss).convert("RGB")
+    sw, sh = im.size
+    cw, ch = sw / 3.0, sh / 2.0
+    out_dir = ART / "sprites" / "projectiles" / "slash_frames"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Preview strip on dark slate grid for visual QA
+    preview = Image.new("RGBA", (256 * 6, 256), (18, 16, 28, 255))
+
+    for idx in range(6):
+        r, c = idx // 3, idx % 3
+        x0 = int(round(c * cw)) + 2
+        y0 = int(round(r * ch)) + 2
+        x1 = int(round((c + 1) * cw)) - 2
+        y1 = int(round((r + 1) * ch)) - 2
+        cell = np.array(im.crop((x0, y0, x1, y1)), dtype=np.float32)
+
+        lum = np.max(cell, axis=2)
+        alpha01 = np.clip((lum - 8.0) / 86.0, 0.0, 1.0) ** 0.76
+        safe_a = np.maximum(alpha01[..., None], 0.08)
+        rgb = np.where(alpha01[..., None] > 0.01, np.clip(cell / safe_a, 0.0, 255.0), 0.0)
+
+        out = np.zeros((cell.shape[0], cell.shape[1], 4), dtype=np.uint8)
+        out[..., :3] = np.clip(rgb, 0, 255).astype(np.uint8)
+        out[..., 3] = np.clip(alpha01 * 255.0, 0, 255).astype(np.uint8)
+
+        # Keep shared fixed cell geometry (centered in equal square) so arc radius stays locked!
+        side = max(out.shape[0], out.shape[1])
+        sq = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+        frame_im = Image.fromarray(out, "RGBA")
+        sq.paste(frame_im, ((side - out.shape[1]) // 2, (side - out.shape[0]) // 2), frame_im)
+        final = sq.resize((256, 256), Image.Resampling.LANCZOS)
+
+        dest = out_dir / f"slash_f{idx}.png"
+        final.save(dest)
+        print("Saved:", dest)
+        preview.paste(final, (idx * 256, 0), final)
+
+        # Upgrade static slash_arc.png fallback/preview icon to crisp Frame 2 peak cleave
+        if idx == 2:
+            arc_dest = ART / "sprites" / "projectiles" / "slash_arc.png"
+            final.save(arc_dest)
+            print("Saved:", arc_dest)
+
+    preview_path = BRAIN_DIR / "scratch" / "slash_frames_preview.png"
+    preview_path.parent.mkdir(parents=True, exist_ok=True)
+    preview.save(preview_path)
+    print("Saved preview:", preview_path)
+
+
 def main():
     import sys
     if "--items-only" in sys.argv:
         build_items_and_sinks()
+        return
+    if "--slash-only" in sys.argv:
+        build_slash_vfx()
+        return
+    if "--icon-only" in sys.argv:
+        build_app_icon()
         return
     # 1. Menu Background (720x1280)
     mb = find_exact_or_latest("menu_bg")
@@ -338,21 +460,8 @@ def main():
         im.save(ART / "ui" / "menu_bg.png")
         print("Saved menu_bg.png")
 
-    # 2. Android Launcher Icon (512x512 + 192x192 rounded squircle + full square adaptive)
-    li = find_exact_or_latest("launcher_icon")
-    if li:
-        im = Image.open(li).convert("RGBA")
-        # Crop slight dark outer frame border (~4% on each side) so emblem fills Android icon nicely
-        w, h = im.size
-        inset = int(w * 0.045)
-        cropped = im.crop((inset, inset, w - inset, h - inset))
-        sq512 = cropped.resize((512, 512), Image.Resampling.LANCZOS)
-        sq512.save(ART / "ui" / "launcher_512.png")
-        sq192 = cropped.resize((192, 192), Image.Resampling.LANCZOS)
-        rounded = Image.new("RGBA", (192, 192), (0, 0, 0, 0))
-        rounded.paste(sq192, (0, 0), make_rounded_mask(192, 42))
-        rounded.save(ART / "ui" / "launcher_192.png")
-        print("Saved launcher_512.png & launcher_192.png")
+    # 2. Android & Desktop App Icons (Option A)
+    build_app_icon()
 
     # 3. Heroes (3x2)
     hs = find_exact_or_latest("heroes_sheet")

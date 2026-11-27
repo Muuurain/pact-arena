@@ -33,14 +33,19 @@ func _exit_tree() -> void:
 	stop_all()
 
 
+func stop_all_sfx() -> void:
+	for p in _sfx_players:
+		p.stop()
+		p.stream = null
+	_sfx_cooldowns.clear()
+
+
 func stop_all() -> void:
 	_current_bgm = ""
 	if _bgm_player != null:
 		_bgm_player.stop()
 		_bgm_player.stream = null
-	for p in _sfx_players:
-		p.stop()
-		p.stream = null
+	stop_all_sfx()
 	_stream_cache.clear()
 
 

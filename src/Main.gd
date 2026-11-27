@@ -78,7 +78,9 @@ func _connect_signals() -> void:
 
 
 func _show_main_menu() -> void:
+	get_tree().paused = false
 	arena.visible = false
+	arena.stop_and_clear()
 	hud.visible = false
 	_shop.visible = false
 	_levelup_modal.visible = false
@@ -88,6 +90,7 @@ func _show_main_menu() -> void:
 	_hero_select.visible = false
 	_sanctuary.visible = false
 	_codex.visible = false
+	AudioManager.stop_all_sfx()
 	_menu.refresh_ui()
 	_menu.visible = true
 	EventBus.bgm_requested.emit("bgm_sanctuary")

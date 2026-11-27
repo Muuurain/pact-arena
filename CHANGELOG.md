@@ -5,6 +5,13 @@ All notable changes to **Pact Arena (血契竞技场)** will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-11-27
+
+### Fixed & Upgraded
+- **暂停返回主界面停服清理**：修复在战斗中打开暂停菜单并点击「返回主界面」后，竞技场后台逻辑仍在继续推波并播放战斗音效的问题；现已在 [Main.gd](src/Main.gd)、[ArenaController.gd](src/combat/ArenaController.gd)、[WeaponRig.gd](src/combat/WeaponRig.gd)、[VfxManager.gd](src/combat/VfxManager.gd) 与 [AudioManager.gd](src/autoload/AudioManager.gd) 全面接入即时清场与战斗声道静默，确保返回即刻安静回归圣所大厅。
+- **近战 6 帧序列斩击动画重做**：使用 **Nano Banana** 生成 3×2 序列帧斩击特写精灵表，切出 `slash_f0.png` ～ `slash_f5.png` 并升级 [VfxManager.gd](src/combat/VfxManager.gd) `spawn_slash_arc()`；结合外层流派着色与内层 `BLEND_MODE_ADD` 炽白核心刀光、正反手挥砍左右镜像轨迹，并将「裂血链锯」四阶「狂风绞肉锯」重构为双弧对向全周旋风斩动画。
+- **全新游戏图标实装（方案 A · 暗夜血刃徽记）**：采用 Nano Banana 重新绘制的高精度刺客血刃徽记制作抗锯齿圆角主图标（[launcher_512.png](assets/art/ui/launcher_512.png)、[launcher_192.png](assets/art/ui/launcher_192.png)）与全套 Android 自适应图标前后景层（[launcher_adaptive_fg.png](assets/art/ui/launcher_adaptive_fg.png)、[launcher_adaptive_bg.png](assets/art/ui/launcher_adaptive_bg.png)），同步升级主界面顶部徽章与桌面窗口运行时图标。
+
 ## [2.4.1] - 2026-11-27
 
 ### Balanced

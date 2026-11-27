@@ -41,6 +41,30 @@ func bind_run(run: RunState) -> void:
 	weapon_rig.setup(_run, player, enemy_mgr, proj_mgr, vfx_mgr)
 
 
+func stop_and_clear() -> void:
+	_wave_active = false
+	_vacuuming = false
+	_vacuum_timer = 0.0
+	_wave_time_left = 0.0
+	_hit_stop_timer = 0.0
+	_shake_trauma = 0.0
+	if cam != null:
+		cam.offset = Vector2.ZERO
+	if player != null:
+		player.set_touch_move_vector(Vector2.ZERO)
+		player.reset_for_wave()
+	if enemy_mgr != null:
+		enemy_mgr.clear_all()
+	if proj_mgr != null:
+		proj_mgr.clear_all()
+	if pickup_mgr != null:
+		pickup_mgr.clear_all()
+	if vfx_mgr != null:
+		vfx_mgr.clear_all()
+	if weapon_rig != null:
+		weapon_rig.clear_all()
+
+
 func start_wave() -> void:
 	if _run == null:
 		return
